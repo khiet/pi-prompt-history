@@ -1,0 +1,14 @@
+{
+	"name": "pi-prompt-history-compatibility-spike",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "node spike/sdk.mjs && python3 spike/tui.py",
+		"lint": "biome check spike/*.mjs spike/*.ts package.json",
+		"lint:fix": "npm run lint -- --write"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.4.8",
+		"@earendil-works/pi-coding-agent": "0.85.1"
+	}
+}
