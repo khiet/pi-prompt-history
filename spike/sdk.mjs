@@ -133,4 +133,6 @@ if (!process.env.SPIKE_ISOLATED) {
 	} finally {
 		session.dispose();
 	}
+	const { verifyStreaming } = await import("./streaming.mjs");
+	await verifyStreaming();
 }

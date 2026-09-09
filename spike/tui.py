@@ -32,6 +32,7 @@ class Pi:
         shortcut="ctrl+r",
         resume=False,
         other_editor=False,
+        reserved_conflict=False,
     ):
         self.root = root
         root.mkdir(parents=True)
@@ -41,6 +42,11 @@ class Pi:
         extensions = self.agent / "extensions"
         extensions.mkdir(parents=True)
         shutil.copy(REPO / "spike/probe.ts", extensions / "probe.ts")
+        if reserved_conflict:
+            # Synthetic configuration only, never the user's agent directory.
+            (self.agent / "keybindings.json").write_text(
+                json.dumps({"app.clear": "ctrl+r"})
+            )
         if other_editor:
             package = REPO / "node_modules/@earendil-works/pi-coding-agent"
             shutil.copy(
@@ -315,6 +321,8 @@ def run(root):
         ("fresh", {}),
         ("ephemeral", {"ephemeral": True}),
         ("alternative", {"shortcut": "alt+h", "other_editor": True}),
+        ("reserved", {"reserved_conflict": True}),
+        ("reserved-alternative", {"reserved_conflict": True, "shortcut": "alt+h"}),
     ]:
         pi = Pi(root / name, **options)
         try:
@@ -328,7 +336,23 @@ def run(root):
                 assert pi.events()[0]["file"] is None
                 pi.send("ephemeral input\r")
                 assert not pi.wait("input")["eligible"]
-            if name == "alternative":
+            if name.startswith("reserved"):
+                count = len(pi.events())
+                pi.send("synthetic draft")
+                assert pi.draft() == "synthetic draft"
+                pi.send("\x12")
+                assert pi.draft() == ""  # Reserved app.clear owns Ctrl+R.
+                assert not any(
+                    e["kind"] in ["open", "input", "renamed"]
+                    for e in pi.events()[count:]
+                )
+                if name == "reserved":
+                    terminal = (pi.root / "terminal.log").read_text(errors="replace")
+                    assert "conflicts with built-in shortcut. Skipping." in terminal
+                pi.command("/history", "open")
+                pi.send("\r")
+                assert pi.draft() == EXACT
+            if name in ["alternative", "reserved-alternative"]:
                 pi.send("\x1bh")
                 pi.wait("open")
                 pi.send("\x1b[B\r")
@@ -336,7 +360,7 @@ def run(root):
         finally:
             pi.close()
     print(
-        "TUI PASS: restarted resumed/native and fresh history; ephemeral exclusion; configured Alt+H with Pi example modal editor. No provider turns."
+        "TUI PASS: restarted resumed/native and fresh history; ephemeral exclusion; configured Alt+H with Pi example modal editor; reserved Ctrl+R conflict warns/skips, /history and configured Alt+H still work. No provider turns."
     )
 
 
