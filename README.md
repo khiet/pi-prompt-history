@@ -1,6 +1,6 @@
 # pi-prompt-history
 
-**Compatibility spike only — not an installable history extension.**
+**Compatibility spike only - not an installable history extension.**
 
 This repository records the bounded investigation for [issue #2](https://github.com/khiet/pi-prompt-history/issues/2), against the guarantees in [the parent PRD](https://github.com/khiet/pi-prompt-history/issues/1). No prompt store, MVP, or release is implemented.
 
@@ -69,7 +69,7 @@ Expected result: one `SDK PASS` and two `TUI PASS` lines, with exit status 0. Ne
 | Cleanup / duplicates | **TUI:** one shutdown per observed factory across the tested transitions and quit, no duplicate idle observations/command registrations after reload, and no backfill inputs. The fixture uses idempotent shutdown and avoids using a closed context on picker completion. **Unverified:** repeated shutdown delivery, concurrent/overlapping pickers, delayed stale results during replacement, and resource cleanup under failure/retry. No storage resources exist in this spike. |
 | Custom UI | **TUI:** public `custom()`, composed Input/SelectList, injected theme/keybinding manager, propagated input focus, filtering, Down/Enter/Escape, and resize from 100 to 24 columns execute without crash. The component truncates lines and invalidates its children. **Unverified:** physical IME candidates/composition, visual theme changes, all terminal widths/heights, all picker controls (Tab/scope, Ctrl+D/confirmation), terminal-control display safety, and broader editor-extension coexistence. This fixture is not the product picker. |
 
-## Blocked guarantees — owner decisions required
+## Blocked guarantees - owner decisions required
 
 ### 1. Exact restoration of arbitrary hook text
 
