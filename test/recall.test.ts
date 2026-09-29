@@ -512,6 +512,9 @@ describe("history shared with other writers", () => {
 		skip: skipPermissionTests,
 	}, async () => {
 		await seed([{ text: "kept prompt", ts: 1 }]);
+		const loaded = await openHistory();
+		loaded.picker.press(keys.escape);
+		await loaded.running;
 		await chmod(store.historyFile, 0o000);
 		const first = await openHistory();
 		assert.match(screen(first.picker.render(200)), /unavailable/i);

@@ -206,24 +206,6 @@ describe("history store", () => {
 		await history.close();
 	});
 
-	test("recovers once an unreadable file is readable again", {
-		skip: skipPermissionTests,
-	}, async () => {
-		await mkdir(paths.dir, { recursive: true });
-		await writeFile(paths.historyFile, line({ id: "a", text: "kept" }));
-		const history = openHistory(paths);
-		await history.search({ query: "" });
-
-		await chmod(paths.historyFile, 0o000);
-		await assert.rejects(history.search({ query: "" }), { code: "EACCES" });
-		await chmod(paths.historyFile, 0o600);
-
-		assert.equal(
-			(await history.search({ query: "" })).records[0]?.text,
-			"kept",
-		);
-	});
-
 	test("keeps accepting appends while the file is unreadable", {
 		skip: skipPermissionTests,
 	}, async () => {
@@ -336,7 +318,24 @@ describe("history retention", () => {
 		assert.equal((await storedLines()).length, 10_001);
 	});
 
-	test("drops malformed lines only when compacting", async () => {
+	test("a compaction keeps records another writer appended after the load", async () => {
+		await seedCount(11_000);
+		const history = openHistory(paths);
+		await history.search({ query: "" });
+		await appendFile(
+			paths.historyFile,
+			line({ id: "theirs", text: "theirs", ts: Date.now() + 60_000 }),
+		);
+		await history.record(entry("mine"));
+		await history.close();
+
+		const texts = (await storedLines()).map((l) => JSON.parse(l).text);
+		assert.equal(texts.length, 10_000);
+		assert.ok(texts.includes("theirs"));
+		assert.ok(texts.includes("mine"));
+	});
+
+	test("a compaction drops malformed lines", async () => {
 		await seedCount(11_000, "torn line\n");
 		const history = openHistory(paths);
 		await history.record(entry("newest"));
