@@ -1,6 +1,21 @@
 # pi-prompt-history
 
-**Development only - not a release.** A Pi extension that records the prompts you type to a local JSONL file and searches them with Ctrl+R or `/history`. [The PRD](https://github.com/khiet/pi-prompt-history/issues/1) is the full contract. The package is `private` and must not be published.
+A Pi extension that records the prompts you type to a local JSONL file and searches them with Ctrl+R or `/history`. [The PRD](https://github.com/khiet/pi-prompt-history/issues/1) is the full contract.
+
+**MVP, not released.** The package is `private` and is not published to npm; install it from a checkout. See [Verification](#verification) for what has and has not been checked.
+
+## Install
+
+Requires a [tested Pi and Node](#tested-compatibility). Clone the repository, then add the checkout to Pi:
+
+```sh
+git clone https://github.com/khiet/pi-prompt-history.git
+pi install /absolute/path/to/pi-prompt-history
+```
+
+`pi install` records the path in `<agent dir>/settings.json`, and Pi loads the extension from the checkout on its next start, or after `/reload`. No `npm install` is needed to run it: the extension uses only Node built-ins and Pi's own packages, has no runtime dependencies, and runs no install scripts. To try it for one run instead, use `pi -e /absolute/path/to/pi-prompt-history`. To remove it, run `pi remove /absolute/path/to/pi-prompt-history`; your recorded history stays in place until you delete it (see [Privacy](#privacy-what-loading-this-extension-changes)).
+
+`pi install git:github.com/khiet/pi-prompt-history` should also work, since Pi clones the repository and runs `npm install --omit=dev`, but that route has not been tested.
 
 ## Usage
 
@@ -26,6 +41,7 @@ The picker distinguishes no prompts recorded in the scope from no prompts matchi
 - The pause lasts for the whole Pi process: it survives `/reload`, `/new`, `/resume`, and `/fork`, and the indicator comes back after each. Only `/history resume` or restarting Pi turns recording back on. It is never saved to disk, so a new Pi process always starts recording.
 - It affects this extension only. It does not stop Pi from saving its own session files, and it does not remove prompts already recorded.
 - Prompts typed while paused are never recorded later; resuming does not backfill them.
+- Keeping the pause across `/reload`, `/new`, `/resume`, and `/fork` relies on an undocumented technique: a flag on `globalThis`, which works because Pi reuses one Node realm for every session runtime in a process. Pi does not promise this; `spike/pause.py` checks it on each [tested release](#tested-compatibility).
 
 ## Delete and clear
 
@@ -105,6 +121,15 @@ What "the text" means:
 
 Session files are never read to backfill history.
 
+## Compared with Pi's built-in history
+
+Pi already keeps your prompts: in its session files, which `/resume` and `/tree` search, and in the editor's Up/Down history. Checked in the real TUI on both [tested releases](#tested-compatibility), with sessions written by Pi's own agent loop:
+
+- In a new Pi process with a new session, Up recalls nothing. After `/resume`, Up recalls that session's prompts. After `/new`, Up still recalls the prompts typed earlier in the same process.
+- This extension's picker finds a prompt typed in an earlier Pi process straight away, without resuming its session.
+
+What the extension adds is one prompt-only index shared by every Pi process and session, searched by substring, scoped to the current directory or all directories, with per-prompt deletion, clearing, and pause. It does not replace Pi's session storage or search it, and removing a prompt here leaves it in Pi's session files.
+
 ## Record format
 
 One JSON object per line, appended with one write per record:
@@ -137,21 +162,27 @@ Capture never blocks or changes prompt processing. If a write fails (for example
 
 ## Development
 
-Requires Node 22.22.0 (the only version tested) and npm.
+Requires Node and npm from the [tested matrix](#tested-compatibility); the real-TUI checks also need Python 3 and a POSIX system with PTYs.
 
 ```sh
 npm ci --ignore-scripts
-npm run lint:fix    # Biome lint and format, with fixes
-npm run typecheck   # strict TypeScript, no emit
-npm test            # node:test against real temporary files
+npm run lint:fix                # Biome lint and format, with fixes
+npm run typecheck               # strict TypeScript, no emit
+npm test                        # node:test against real temporary files
+npm run check:package           # the packed files and package.json rules below
+npm run smoke:install -- 0.87.1 # install the packed package, load it in real Pi
+npm run acceptance              # real-TUI release checks (spike/acceptance.py)
+npm run spike                   # compatibility spike, shortcut, and pause checks
 ```
 
-To try it locally, load it for one run, or add the checkout to your Pi packages:
+To check another Pi release, install it over the lockfile, run the checks, then restore the lock:
 
 ```sh
-pi -e ./src/index.ts
-pi install /absolute/path/to/pi-prompt-history
+npm install --no-save --ignore-scripts --save-exact @earendil-works/pi-coding-agent@0.87.1 @earendil-works/pi-tui@0.87.1 @earendil-works/pi-ai@0.87.1
+npm ci --ignore-scripts
 ```
+
+Lint Python changes with Ruff (`ruff check --fix spike && ruff format spike`) if it is installed.
 
 Layout:
 
@@ -160,38 +191,49 @@ Layout:
 - `src/picker.ts`: the search picker, composed from Pi's `Input` and `SelectList`. No file I/O.
 - `src/config.ts`: store and config paths from `getAgentDir()`, and the validated shortcut setting.
 - `test/`: behavior tests. `delete.test.ts` and `clear.test.ts` cover deletion through the picker and `/history clear`. `concurrency.test.ts` runs the store in several Node processes at once. `harness.ts` is a minimal host that records registered handlers and fires events at them; it is not a Pi runtime.
-- `spike/` and `docs/research/`: the compatibility spike (`npm run spike`) and research that shaped the design. `spike/shortcut.py` drives the real extension in real Pi to check the shortcut, its config, reload, and `/history`. `spike/pause.py` does the same for pause, with `spike/driver.ts` swallowing prompts so no model is called.
+- `scripts/`: packaging checks. `check-package.mjs` asserts the rules below against `npm pack`. `smoke-install.mjs` packs the extension and unpacks it where no `node_modules` can reach it, installs the given Pi release with `--omit=dev --ignore-scripts`, adds the extension with `pi install`, and checks that Pi loads `/history` from it and that print, JSON, and RPC prompts reach the input hook but are never recorded.
+- `spike/`: real-Pi checks and the compatibility spike. `acceptance.py` drives the real extension in the real TUI through `harness.py`, with `scripted.ts` as an in-process model whose replies and compactions wait for the script, so it can type while Pi streams or compacts. `shortcut.py` covers the shortcut, its config, reload, and every reserved-action conflict. `pause.py` covers pause, with `driver.ts` swallowing prompts so no model is called. `sdk.mjs`, `streaming.mjs`, `tui.py`, and `probe.ts` are the original spike; `docs/research/` records its findings.
 
 The extension registers handlers and reads `config.json` once to register the shortcut; it opens the history file only at the first eligible prompt or search. Each Pi session runtime (startup, `/reload`, `/new`, `/resume`, `/fork`) gets a fresh extension instance, and `session_shutdown` stops capture, waits for pending writes, and closes the store, so a replaced runtime never records, and a picker still open when its session shuts down restores nothing. The pause flag is the one thing kept across runtimes: it lives on `globalThis` under `Symbol.for("pi-prompt-history/process-state")`, because Pi documents no process-lifetime state. This relies on Pi reusing one Node realm for every runtime in a process, which Pi does not promise, so `spike/pause.py` must pass on every supported Pi release.
 
-Only `@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui` are imported at runtime, both as `*` peer dependencies; there are no other runtime dependencies. The published-files allowlist is in `package.json`.
+Package rules, checked by `npm run check:package`:
+
+- One extension entry point, `./src/index.ts`, declared under `pi.extensions`.
+- An explicit `files` allowlist of the four modules; npm adds `package.json` and `README.md`, and nothing else is packed, so no local history, tests, or spike files ship.
+- `@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui` are `*` peer dependencies, as Pi's package docs require, and are never bundled. Runtime imports are limited to them and Node built-ins. There are no `dependencies` and no install or `prepare` scripts.
+- `package-lock.json` is committed; CI installs with `npm ci --ignore-scripts`.
 
 ## Tested compatibility
 
 | | Tested |
 | --- | --- |
-| Pi | 0.85.1 (locked) and 0.87.1 |
-| Node | 22.22.0 |
-| Platform | macOS arm64 |
+| Pi | 0.85.1 (locked) and 0.87.1, the current stable release on 2026-09-29 |
+| Node | 22.22.0 and 24.21.0 |
+| Platform | macOS arm64 locally; CI declares Ubuntu |
 
-On both Pi versions, typecheck and `npm test` pass, and Pi's own extension loader loads the package from its manifest with no errors and no history-file I/O; loading reads only `config.json`. The `*` peer range is packaging convention, not a claim of wider support.
+CI runs lint, typecheck, `npm test`, `check:package`, and `smoke:install` for each Pi and Node pair above. The `*` peer range is packaging convention, not a claim of wider support. Pi's own engine range (`>=22.19.0`) is not evidence either: other Node versions have not been tested.
 
-On both Pi versions, `python3 spike/shortcut.py` passes in a real TUI (PTY, `TERM=xterm-256color`): Ctrl+R opens the picker instead of rename, with Pi's conflict warning; a configured Alt+H opens it and Ctrl+R then does not; an invalid config warns and falls back to Ctrl+R; with `app.clear` bound to Ctrl+R, Pi skips the shortcut and `/history` still opens; and after editing the config, the old key keeps working until `/reload`, then only the new key does.
+## Verification
 
-On both Pi versions, `python3 spike/pause.py` passes in the same real TUI: `/history pause` stops recording and shows `history paused`; the pause and the indicator survive Pi's own `/reload`, `/new`, `/resume`, and `/fork`; `/history resume` clears the indicator and records again; the pause command changes no file under the agent directory; and a restarted process records with no indicator.
+Recorded on 2026-09-29 on macOS arm64. Real-TUI checks run the real CLI in a PTY with `TERM=xterm-256color`, in isolated temporary home and agent directories, with no network.
 
-The tests use a minimal host harness. They do not prove real-TUI streaming, replay, or lifecycle behavior. The input-hook fields, exclusions, and session transitions the capture relies on were observed in the real TUI and SDK by the [compatibility spike](docs/research/compatibility-spike.md).
+On both Pi releases, with Node 22.22.0:
 
-## Remaining gates
+- `npm run lint`, `npm run typecheck`, `npm test` (157 tests), `npm run check:package`, and `npm run smoke:install` pass. All of these also pass with Node 24.21.0.
+- `spike/acceptance.py` passes: idle, steering (Enter while streaming), and follow-up (Alt+Enter) prompts are each recorded once, and delivering them records nothing more; prompts queued during `/compact` are recorded as described in [What gets recorded](#what-gets-recorded) (only the first on 0.85.1, each once on 0.87.1); the [built-in history comparison](#compared-with-pis-built-in-history); restore with normalization and without submitting, and Escape keeping the draft; the image warning, declined and accepted; Tab scope and Ctrl+D with its confirmation; `/history clear cwd` and `clear all` through Pi's confirmation dialog, cancelled and accepted; resizing to 24, 10, 200, and 60 columns with the picker open; Japanese, accented, and emoji text typed and found with case-folded and punctuation queries; the light theme; Pi's `modal-editor.ts` example loaded alongside; two Ctrl+R presses leaving one picker; and a picker open while the session is replaced restoring nothing into the new one.
+- `spike/shortcut.py` passes, including Ctrl+R bound to each of Pi's 18 reserved actions: Pi warns and skips the shortcut, and `/history` still opens. For `app.exit`, `app.suspend`, and `app.editor.external`, Ctrl+R itself was not pressed.
+- `spike/pause.py` and `npm run spike` pass.
 
-Not verified, and required before any release:
+The automated tests cover capture, search, storage, and lifecycle; Unicode and punctuation matching; the 32,768-byte boundary; retention and compaction; rereading a file other processes changed; the newest-100 cap over all retained records; confirmations; config fallback and reload; and the unavailable state without stale results. They use a [minimal host harness](#development), not a Pi runtime.
 
-- Capture in the real TUI with a real provider: streaming, steering and follow-up keystrokes, replay and retry paths, and prompts queued during compaction.
-- Exclusion of input from real print, JSON, and RPC frontends.
-- Lifecycle races in real Pi: repeated shutdown delivery and writes still pending during session replacement.
-- Real attachments: clipboard and drag-and-drop images alongside text, and the image warning before `/history` replaces such a draft.
-- The search shortcut in terminals other than the PTY check above: other terminal emulators, `super` and `ctrl+shift` keys (which need the Kitty keyboard protocol), tmux/screen, and reserved actions other than `app.clear`.
-- The picker in the real TUI: restoration and editor normalization, cancellation, Ctrl+D deletion and its confirmation, IME composition, themes, resizing, and narrow terminals.
-- `/history clear cwd` and `/history clear all` with Pi's real confirmation dialog.
-- Concurrent appends from several real Pi processes. `test/concurrency.test.ts` covers several Node processes sharing the store, not several Pi instances.
-- Any Pi release other than 0.85.1 and 0.87.1, and any other Node version or platform.
+### Unverified
+
+Not checked, so not claimed:
+
+- CI itself: the workflow has not run on Ubuntu yet, and the real-TUI checks run only locally, on macOS with Node 22.22.0.
+- Physical IME composition and candidate windows; the PTY sends committed text only. How themes look, and switching themes while Pi runs. Terminal emulators, tmux or screen, and keys that need the Kitty keyboard protocol (`super`, `ctrl+shift`).
+- Real images: clipboard paste, drag and drop, and CLI image arguments. The warning was checked with an image path typed into the draft.
+- Real model providers. The scripted model drives Pi's real agent loop, queues, and compaction, but not HTTP, retries in the TUI, or automatic (threshold or overflow) compaction in the TUI.
+- Pi delivering `session_shutdown` twice to one runtime; only the host harness tests a repeated shutdown.
+- Several real Pi processes appending at once; `test/concurrency.test.ts` uses several Node processes.
+- Other editor extensions than `modal-editor.ts`, installing from git, Windows, and any Pi release, Node version, or platform not in the table above.
