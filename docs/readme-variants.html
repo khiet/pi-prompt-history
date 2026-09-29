@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Three concise README proposals for pi-prompt-history, written for experienced developers.">
+  <title>pi-prompt-history | Three README directions</title>
+  <style>
+    :root { --ink: #202923; --muted: #56635a; --paper: #f5f4ef; --line: #d9ddd4; --green: #245b42; --code: #edf1eb; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    a { color: var(--green); text-underline-offset: .2em; }
+    a:hover { text-decoration-thickness: 2px; }
+    a:focus-visible, summary:focus-visible { outline: 3px solid var(--green); outline-offset: 5px; }
+    .skip { position: absolute; top: -5rem; left: 1rem; padding: .6rem; background: white; z-index: 3; }
+    .skip:focus { top: 1rem; }
+    .wrap { max-width: 1000px; margin: auto; padding: 0 28px; }
+    .masthead { padding-top: 64px; padding-bottom: 36px; }
+    .eyebrow, .number { font: 700 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--green); }
+    h1 { font-size: clamp(2.2rem, 5vw, 3.7rem); line-height: 1.1; letter-spacing: -.055em; margin: 16px 0 20px; }
+    .intro { color: var(--muted); max-width: 720px; font-size: 1.1rem; }
+    .nav { position: sticky; top: 0; z-index: 2; background: #f5f4eff5; border-block: 1px solid var(--line); }
+    .nav .wrap { display: flex; gap: 24px; flex-wrap: wrap; padding-block: 15px; }
+    .nav a { font-size: .88rem; font-weight: 650; text-decoration: none; }
+    main { padding-bottom: 60px; }
+    .direction { margin-top: 48px; }
+    .direction-head { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: end; margin-bottom: 18px; }
+    .direction-head h2 { margin: 4px 0 0; font-size: 1.5rem; letter-spacing: -.035em; }
+    .direction-head p { color: var(--muted); font-size: .9rem; margin: 0; }
+    .badge { display: inline-block; margin-left: 8px; border: 1px solid #b7cfbe; border-radius: 99px; padding: 3px 9px; font: 600 11px/1.5 system-ui, sans-serif; letter-spacing: 0; text-transform: none; vertical-align: middle; }
+    article { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 40px 48px; box-shadow: 0 8px 30px #263b2d05; }
+    article h3 { font-size: 1.9rem; letter-spacing: -.045em; line-height: 1.2; margin: 0 0 14px; overflow-wrap: anywhere; }
+    article h4 { font-size: 1.05rem; line-height: 1.4; margin: 28px 0 10px; }
+    article p { margin: 12px 0; }
+    article ul { padding-left: 22px; }
+    article li { margin-block: 5px; }
+    code, pre, kbd { font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: .86em; }
+    code { background: var(--code); padding: .12em .3em; border-radius: 4px; overflow-wrap: anywhere; }
+    pre { background: #18281f; color: #edf5e9; border-radius: 7px; padding: 18px 20px; overflow-x: auto; line-height: 1.7; }
+    pre code { background: none; padding: 0; color: inherit; font-size: 1em; overflow-wrap: normal; }
+    kbd { padding: .1em .3em; border: 1px solid #cdd4cc; border-bottom-width: 2px; border-radius: 4px; white-space: nowrap; }
+    .notice { border-left: 3px solid #b27b30; background: #fcf8ef; padding: 10px 16px; font-size: .94rem; }
+    .meta { font-size: .88rem; color: var(--muted); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .92rem; text-align: left; }
+    th, td { border-bottom: 1px solid var(--line); padding: 10px 12px 10px 0; vertical-align: top; }
+    th { font-weight: 650; }
+    .reference h3, .reference h4 { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: -.04em; }
+    .narrative h3 { font-family: Georgia, "Times New Roman", serif; font-size: 2.2rem; font-weight: 500; }
+    .narrative .lead { font-size: 1.18rem; }
+    .article-footer { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); font-size: .87rem; }
+    .editorial { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 28px; }
+    .editorial h2 { font-size: 1.4rem; }
+    .editorial p, .editorial li { color: var(--muted); font-size: .94rem; }
+    .editorial li { margin-block: 9px; }
+    summary { cursor: pointer; font-weight: 650; }
+    footer.wrap { padding-bottom: 40px; font-size: .8rem; color: var(--muted); }
+    @media (max-width: 640px) {
+      .wrap { padding-inline: 18px; }
+      .masthead { padding-top: 36px; }
+      .nav .wrap { gap: 10px 18px; }
+      .nav a { font-size: .8rem; }
+      .direction-head { grid-template-columns: 1fr; gap: 8px; }
+      article { padding: 26px 20px; }
+      article h3 { font-size: 1.6rem; }
+      pre { padding: 14px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    @media print {
+      body { background: white; font-size: 10pt; }
+      .nav, .skip { display: none; }
+      .masthead { padding-top: 0; }
+      .direction { break-before: page; margin-top: 0; }
+      article { box-shadow: none; border: 0; padding: 0; }
+      pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #eee; color: #111; }
+      a { color: inherit; }
+      h4 { break-after: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#versions">Skip to README proposals</a>
+  <header class="wrap masthead">
+    <div class="eyebrow">pi-prompt-history / README workshop</div>
+    <h1>Less contract.<br>More getting started.</h1>
+    <p class="intro">Three complete README proposals for experienced developers. Same extension, same constraints, different voices. Installation, everyday use, and consequential caveats stay visible; implementation detail stays in the reference.</p>
+    <p class="meta">Proposals only. The repository's README is unchanged. Start with <a href="#minimal">01 / Minimal</a> for the strongest default.</p>
+  </header>
+  <nav class="nav" aria-label="README versions">
+    <div class="wrap">
+      <a href="#minimal">01 / Minimal</a>
+      <a href="#reference">02 / Reference-first</a>
+      <a href="#workflow">03 / Workflow-led</a>
+      <a href="#rationale">Sources &amp; rationale</a>
+    </div>
+  </nav>
+  <main class="wrap" id="versions">
+    <section class="direction" id="minimal" aria-labelledby="minimal-title">
+      <header class="direction-head">
+        <div><span class="number">01 / Straight to the point</span><h2 id="minimal-title">Minimal <span class="badge">Recommended</span></h2></div>
+        <p>Short declarative prose. A quick scan answers what it does, how to install it, and what to watch out for.</p>
+      </header>
+      <article aria-label="Minimal README proposal">
+        <h3>pi-prompt-history</h3>
+        <p>Persistent prompt search for Pi. Press <kbd>Ctrl+R</kbd> to find a previous prompt and load it into the editor without sending it.</p>
+        <p>History spans sessions and Pi processes. Search the current directory by default; press <kbd>Tab</kbd> to search all directories. No session resume required.</p>
+        <p class="notice"><strong>MVP, not production-ready.</strong> Prompts are stored in plain text. Rewrites can lose concurrent appends. MIT licensed; not published to npm.</p>
+        <h4>Install</h4>
+        <pre><code>git clone https://github.com/khiet/pi-prompt-history.git
+pi install /absolute/path/to/pi-prompt-history</code></pre>
+        <p>Restart Pi or run <code>/reload</code>. No <code>npm install</code> required. Try once with <code>pi -e /absolute/path/to/pi-prompt-history</code>.</p>
+        <p class="meta">Tested: Pi 0.85.1 and 0.87.1; Node 22.22.0 and 24.21.0; macOS arm64 locally and Ubuntu in CI. Windows is unverified.</p>
+        <h4>Use</h4>
+        <div class="table-wrap"><table>
+          <thead><tr><th scope="col">Key / command</th><th scope="col">Action</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>Ctrl+R</kbd> or <code>/history</code></td><td>Open prompt search</td></tr>
+            <tr><td><kbd>Tab</kbd></td><td>Switch current directory / all directories</td></tr>
+            <tr><td><kbd>Up</kbd> / <kbd>Down</kbd></td><td>Select a prompt</td></tr>
+            <tr><td><kbd>Enter</kbd> / <kbd>Esc</kbd></td><td>Replace the draft / cancel unchanged</td></tr>
+            <tr><td><kbd>Ctrl+D</kbd></td><td>Delete the selected record after confirmation</td></tr>
+            <tr><td><code>/history pause</code> / <code>/history resume</code></td><td>Stop / start recording</td></tr>
+            <tr><td><code>/history clear cwd</code> / <code>/history clear all</code></td><td>Clear a scope after confirmation</td></tr>
+          </tbody>
+        </table></div>
+        <p>Search is a case-insensitive literal substring match, newest first, capped at 100 results. Directory scope uses the exact cwd, not the Git root. Restore replaces the entire draft; saved attachments are not restored.</p>
+        <h4>Shortcut</h4>
+        <p><kbd>Ctrl+R</kbd> shadows Pi's session-rename shortcut and triggers a conflict warning. To change history search, create <code>&lt;agent dir&gt;/prompt-history/config.json</code>, then <code>/reload</code>:</p>
+        <pre><code>{ "shortcut": "alt+h" }</code></pre>
+        <p><code>/history</code> remains available if the shortcut conflicts.</p>
+        <h4>Storage &amp; limits</h4>
+        <ul>
+          <li>Local JSONL: <code>&lt;agent dir&gt;/prompt-history/history.jsonl</code>. Agent dir defaults to <code>~/.pi/agent</code>; override with <code>PI_CODING_AGENT_DIR</code>.</li>
+          <li>Records interactive TUI prompt text, including steering and follow-up. No attachments, command history, session backfill, or model-context injection. Skips <code>--no-session</code>, print, JSON, and RPC modes.</li>
+          <li>Pause survives reloads and session changes until resume or process restart. It does not stop Pi's own session storage.</li>
+          <li>Compacts to the newest 10,000 records after the process's count exceeds 11,000. Prompts over 32,768 UTF-8 bytes are skipped.</li>
+          <li>No locking; compaction, deletion, and clearing can lose another process's concurrent append. Local filesystems only.</li>
+        </ul>
+        <p>Remove with <code>pi remove /absolute/path/to/pi-prompt-history</code>. History remains until cleared or deleted. Deletion here does not erase Pi session files or backups.</p>
+        <h4>Develop</h4>
+        <pre><code>npm ci --ignore-scripts
+npm run lint:fix
+npm run typecheck &amp;&amp; npm test &amp;&amp; npm run check:package</code></pre>
+        <div class="article-footer"><a href="https://github.com/khiet/pi-prompt-history/blob/affad845f86be400dabc6497f853f0483ac2cbe7/README.md">Detailed behavior &amp; verification</a> · <a href="https://github.com/khiet/pi-prompt-history/issues">Issues</a> (omit prompts and secrets) · <a href="https://github.com/khiet/pi-prompt-history/blob/main/SECURITY.md">Security</a> · <a href="https://github.com/khiet/pi-prompt-history/blob/main/LICENSE">MIT</a></div>
+      </article>
+    </section>
+
+    <section class="direction" id="reference" aria-labelledby="reference-title">
+      <header class="direction-head">
+        <div><span class="number">02 / The compact manual</span><h2 id="reference-title">Reference-first</h2></div>
+        <p>Tables, explicit boundaries, minimal narrative. Best for readers evaluating behavior and operational tradeoffs.</p>
+      </header>
+      <article class="reference" aria-label="Reference-first README proposal">
+        <h3>pi-prompt-history</h3>
+        <p>Cross-session prompt history for Pi's interactive TUI. Local JSONL storage; substring search; restore to editor, never auto-submit.</p>
+        <p class="notice"><strong>Status:</strong> open-source MVP, not production-ready. Unpublished npm package. Plain-text storage; concurrent rewrites are not lossless.</p>
+        <h4>Setup</h4>
+        <pre><code>git clone https://github.com/khiet/pi-prompt-history.git
+pi install /absolute/path/to/pi-prompt-history</code></pre>
+        <p>Restart or <code>/reload</code>. No runtime dependency installation needed.</p>
+        <div class="table-wrap"><table>
+          <tbody>
+            <tr><th scope="row">Tested Pi</th><td>0.85.1, 0.87.1</td></tr>
+            <tr><th scope="row">Tested Node</th><td>22.22.0, 24.21.0</td></tr>
+            <tr><th scope="row">Platforms</th><td>macOS arm64 locally; Ubuntu CI. Windows unverified.</td></tr>
+            <tr><th scope="row">One-off load</th><td><code>pi -e /absolute/path/to/pi-prompt-history</code></td></tr>
+            <tr><th scope="row">Remove</th><td><code>pi remove /absolute/path/to/pi-prompt-history</code> (keeps history)</td></tr>
+          </tbody>
+        </table></div>
+        <h4>Interface</h4>
+        <div class="table-wrap"><table>
+          <thead><tr><th scope="col">Input</th><th scope="col">Effect</th></tr></thead>
+          <tbody>
+            <tr><td><code>/history</code>, <kbd>Ctrl+R</kbd></td><td>Open with empty query, current-directory scope</td></tr>
+            <tr><td>Type / <kbd>Tab</kbd></td><td>Filter / toggle directory and global scope</td></tr>
+            <tr><td><kbd>Up</kbd>, <kbd>Down</kbd></td><td>Select; preview below the list</td></tr>
+            <tr><td><kbd>Enter</kbd></td><td>Replace the entire draft; do not send</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Close without changing the draft</td></tr>
+            <tr><td><kbd>Ctrl+D</kbd></td><td>Confirm deletion of one record</td></tr>
+            <tr><td><code>/history pause</code>, <code>/history resume</code></td><td>Disable / enable capture for this process</td></tr>
+            <tr><td><code>/history clear cwd</code>, <code>/history clear all</code></td><td>Confirm clearing the selected scope</td></tr>
+          </tbody>
+        </table></div>
+        <p>Search: case-insensitive literal substring, newest first, maximum 100 matches. Scope: exact cwd, not repository root. Duplicate submissions remain separate records. Recalled attachments are not restored.</p>
+        <h4>Configuration</h4>
+        <p><code>&lt;agent dir&gt;/prompt-history/config.json</code>:</p>
+        <pre><code>{ "shortcut": "alt+h" }</code></pre>
+        <p><code>shortcut</code> is the only setting; reload to apply. Default <code>ctrl+r</code> shadows Pi's session rename and produces a warning. <code>/history</code> works independently of the shortcut.</p>
+        <h4>Persistence contract</h4>
+        <div class="table-wrap"><table>
+          <tbody>
+            <tr><th scope="row">Path</th><td><code>&lt;agent dir&gt;/prompt-history/history.jsonl</code>; agent dir is <code>~/.pi/agent</code> or <code>PI_CODING_AGENT_DIR</code></td></tr>
+            <tr><th scope="row">Capture</th><td>Interactive TUI text in persisted sessions, including steering and follow-up; no session backfill</td></tr>
+            <tr><th scope="row">Excluded</th><td>Attachments, extension and built-in commands, assistant/tool output, ephemeral sessions, print/JSON/RPC modes</td></tr>
+            <tr><th scope="row">Privacy</th><td>Plain text, including secrets. No history tool or model-context injection.</td></tr>
+            <tr><th scope="row">Pause</th><td>Survives reloads and session changes; resets on process restart. Pi session storage continues.</td></tr>
+            <tr><th scope="row">Retention</th><td>Compacts to 10,000 records when the process's count passes 11,000; skips prompts over 32,768 UTF-8 bytes</td></tr>
+            <tr><th scope="row">Concurrency</th><td>No locking. Rewrites for compaction, deletion, or clearing can lose concurrent appends. No network filesystems.</td></tr>
+            <tr><th scope="row">Erasure</th><td>Clear/delete affects this file only, not Pi sessions or backups; no forensic-erasure guarantee</td></tr>
+          </tbody>
+        </table></div>
+        <h4>Development</h4>
+        <pre><code>npm ci --ignore-scripts
+npm run lint:fix
+npm run typecheck &amp;&amp; npm test &amp;&amp; npm run check:package</code></pre>
+        <div class="article-footer"><a href="https://github.com/khiet/pi-prompt-history/blob/affad845f86be400dabc6497f853f0483ac2cbe7/README.md">Full contract, version caveats &amp; verification</a> · <a href="https://github.com/khiet/pi-prompt-history/issues">Issues</a> (no prompt history or secrets) · <a href="https://github.com/khiet/pi-prompt-history/blob/main/SECURITY.md">Security</a> · <a href="https://github.com/khiet/pi-prompt-history/blob/main/LICENSE">MIT</a></div>
+      </article>
+    </section>
+
+    <section class="direction" id="workflow" aria-labelledby="workflow-title">
+      <header class="direction-head">
+        <div><span class="number">03 / Show the workflow</span><h2 id="workflow-title">Workflow-led</h2></div>
+        <p>A conversational opening, then task-oriented sections. Explains the value without turning into a tutorial.</p>
+      </header>
+      <article class="narrative" aria-label="Workflow-led README proposal">
+        <h3>pi-prompt-history</h3>
+        <p class="lead">Find the prompt. Not the session.</p>
+        <p>You wrote the useful prompt yesterday, in another Pi process. Press <kbd>Ctrl+R</kbd>, type a fragment, and bring it back into the editor. Edit it before sending. No need to resume the old session.</p>
+        <p class="notice">This is an <strong>MVP, not production-ready</strong>. It keeps a plain-text copy of your prompts, and file rewrites can lose concurrent writes. MIT licensed; not on npm.</p>
+        <h4>Add it to Pi</h4>
+        <pre><code>git clone https://github.com/khiet/pi-prompt-history.git
+pi install /absolute/path/to/pi-prompt-history</code></pre>
+        <p>Restart Pi or run <code>/reload</code>. No <code>npm install</code> needed. For a single run, use <code>pi -e /absolute/path/to/pi-prompt-history</code>.</p>
+        <p class="meta">Tested with Pi 0.85.1 / 0.87.1 and Node 22.22.0 / 24.21.0, on macOS arm64 locally and Ubuntu in CI. Windows has not been verified.</p>
+        <h4>Recall, edit, send</h4>
+        <p>Open <code>/history</code> or press <kbd>Ctrl+R</kbd>. Type any fragment; search uses case-insensitive literal matching and lists the newest 100 results. Use <kbd>Up</kbd> / <kbd>Down</kbd> to select and preview.</p>
+        <p>The picker starts in the current directory, matched by exact cwd rather than Git root. Press <kbd>Tab</kbd> to include all directories. <kbd>Enter</kbd> replaces the whole draft without submitting; <kbd>Esc</kbd> leaves it alone. Attachments from the old prompt do not come back.</p>
+        <p>Pi already uses <kbd>Ctrl+R</kbd> for session rename. This extension takes that key and Pi warns about the conflict. Prefer another key? Create <code>&lt;agent dir&gt;/prompt-history/config.json</code>, then reload:</p>
+        <pre><code>{ "shortcut": "alt+h" }</code></pre>
+        <p><code>/history</code> still works if a shortcut conflicts.</p>
+        <h4>Keep only what you want</h4>
+        <p>Run <code>/history pause</code> before sensitive input and <code>/history resume</code> when done. Pause survives reloads and session changes, but not a process restart. <strong>Pi still saves its own sessions.</strong></p>
+        <p>Use <kbd>Ctrl+D</kbd> in the picker to delete one record. Use <code>/history clear cwd</code> or <code>/history clear all</code> for a whole scope. Each asks for confirmation; none erases Pi's session files or backups.</p>
+        <h4>Know where it goes</h4>
+        <p>Prompt text lives in <code>&lt;agent dir&gt;/prompt-history/history.jsonl</code>. The agent directory is <code>~/.pi/agent</code> unless <code>PI_CODING_AGENT_DIR</code> is set. History is not injected into model context.</p>
+        <ul>
+          <li>Records interactive TUI prompts, including steering and follow-up. No attachments, command history, or old-session import. No recording in <code>--no-session</code>, print, JSON, or RPC modes.</li>
+          <li>Compacts to 10,000 records once the process's count exceeds 11,000. Skips prompts over 32,768 UTF-8 bytes.</li>
+          <li>Uses a shared local file without locking. Compaction, delete, and clear can lose another process's concurrent append. Network filesystems are unsupported.</li>
+        </ul>
+        <p>Uninstall with <code>pi remove /absolute/path/to/pi-prompt-history</code>. The history file stays until you clear or delete it.</p>
+        <h4>Work on it</h4>
+        <pre><code>npm ci --ignore-scripts
+npm run lint:fix
+npm run typecheck &amp;&amp; npm test &amp;&amp; npm run check:package</code></pre>
+        <div class="article-footer"><a href="https://github.com/khiet/pi-prompt-history/blob/affad845f86be400dabc6497f853f0483ac2cbe7/README.md">Detailed behavior &amp; verification</a> · <a href="https://github.com/khiet/pi-prompt-history/issues">Report a bug</a> with Pi, Node, and platform versions, never prompts or secrets · <a href="https://github.com/khiet/pi-prompt-history/blob/main/SECURITY.md">Security</a> · <a href="https://github.com/khiet/pi-prompt-history/blob/main/LICENSE">MIT</a></div>
+      </article>
+    </section>
+
+    <section class="editorial" id="rationale" aria-labelledby="rationale-title">
+      <div class="eyebrow">Editorial notes / Not part of the proposals</div>
+      <h2 id="rationale-title">What changed, and why</h2>
+      <p><strong>Recommendation: Minimal.</strong> It balances a fast first read with explicit safety boundaries. Reference-first suits readers auditing semantics; Workflow-led gives the feature a more memorable introduction.</p>
+      <ul>
+        <li><strong>Keep the front door small.</strong> Purpose, working install command, controls, config, storage risks, and development checks. Do not make readers parse lifecycle internals before trying the extension.</li>
+        <li><strong>Keep consequential caveats visible.</strong> Plain-text secrets, draft replacement, the Ctrl+R conflict, concurrency loss, and the separation from Pi's session storage are not footnotes.</li>
+        <li><strong>Link the evidence rather than reproduce it.</strong> Unicode edge cases, the JSONL schema, lifecycle implementation, test inventories, and version-specific capture caveats belong in the detailed reference.</li>
+        <li><strong>Use the tested installation path.</strong> This package is private and unpublished. The proposals intentionally do not borrow npm install commands from published extensions or promote the unverified git-install route.</li>
+      </ul>
+      <p>Compatibility claims are carried over from the existing README, not newly tested here. Reference links pin that README to the source commit so these proposals remain usable if the main README changes. On adoption, move the full reference into <code>docs/</code> and link there instead.</p>
+      <details open>
+        <summary>Research sources and inspiration</summary>
+        <div id="research-sources">
+          <p>Pi's <a href="https://pi.dev/docs/latest/packages">package documentation</a> and <a href="https://pi.dev/docs/latest/cli">CLI reference</a> establish installation and removal conventions. The writing recommendations above are editorial synthesis, not an official Pi README standard.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th scope="col">First-party README</th><th scope="col">npm downloads</th><th scope="col">Pattern borrowed</th></tr></thead>
+            <tbody>
+              <tr><td><a href="https://github.com/nicobailon/pi-subagents/blob/main/README.md">pi-subagents</a></td><td>506,599</td><td>Purpose, install, an immediate interaction, then linked reference docs</td></tr>
+              <tr><td><a href="https://github.com/nicobailon/pi-mcp-adapter/blob/main/README.md">pi-mcp-adapter</a></td><td>1,197,959</td><td>Explicit first-run expectations and behavior tables</td></tr>
+              <tr><td><a href="https://github.com/nicobailon/pi-web-access/blob/main/README.md">pi-web-access</a></td><td>459,058</td><td>Capability-led opening; required installation separated from optional configuration</td></tr>
+            </tbody>
+          </table></div>
+          <p>Counts are from the <a href="https://api.npmjs.org/downloads/point/2026-08-29:2026-09-27/pi-subagents,pi-mcp-adapter,pi-web-access">npm downloads API for August 29 through September 27, 2026</a>, corroborated by rounded figures in the <a href="https://pi.dev/packages">Pi catalog</a>. Downloads are not unique users or proof of an ecosystem-wide usage ranking. All three samples share an author, so this is a prominent sample, not a representative style survey.</p>
+          <p>Borrow the onboarding structure, not the full length: these READMEs contain much more reference material than this extension needs on its front page. <a href="research/readme-inspiration.md">Research notes</a> record sources and qualifications.</p>
+        </div>
+      </details>
+    </section>
+  </main>
+  <footer class="wrap">Self-contained HTML. No scripts, external fonts, analytics, or runtime dependencies. External links open the cited sources.</footer>
+</body>
+</html>
