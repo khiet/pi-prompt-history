@@ -2,7 +2,7 @@
 
 A Pi extension that records the prompts you type to a local JSONL file and searches them with Ctrl+R or `/history`. [The PRD](https://github.com/khiet/pi-prompt-history/issues/1) is the full contract.
 
-**MVP, not released.** The package is `private` and is not published to npm; install it from a checkout. See [Verification](#verification) for what has and has not been checked.
+**Open-source MVP, not an npm release.** The code is [MIT licensed](LICENSE), but the package is `private` and is not published to npm; install it from a checkout. It is not production-ready: it stores your prompts in [plain text](#privacy-what-loading-this-extension-changes), a rewrite can [lose another process's prompt](#several-pi-processes), and several platforms and integrations are [unverified](#unverified).
 
 ## Install
 
@@ -199,7 +199,8 @@ The extension registers handlers and reads `config.json` once to register the sh
 Package rules, checked by `npm run check:package`:
 
 - One extension entry point, `./src/index.ts`, declared under `pi.extensions`.
-- An explicit `files` allowlist of the four modules; npm adds `package.json` and `README.md`, and nothing else is packed, so no local history, tests, or spike files ship.
+- An explicit `files` allowlist of the four modules; npm adds `package.json`, `README.md`, and `LICENSE`, and nothing else is packed, so no local history, tests, or spike files ship.
+- The package stays `private`, and `package.json`, the lockfile, and `LICENSE` all say MIT.
 - `@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui` are `*` peer dependencies, as Pi's package docs require, and are never bundled. Runtime imports are limited to them and Node built-ins. There are no `dependencies` and no install or `prepare` scripts.
 - `package-lock.json` is committed; CI installs with `npm ci --ignore-scripts`.
 
@@ -209,7 +210,7 @@ Package rules, checked by `npm run check:package`:
 | --- | --- |
 | Pi | 0.85.1 (locked) and 0.87.1, the current stable release on 2026-09-29 |
 | Node | 22.22.0 and 24.21.0 |
-| Platform | macOS arm64 locally; CI declares Ubuntu |
+| Platform | macOS arm64 locally; Ubuntu in CI |
 
 CI runs lint, typecheck, `npm test`, `check:package`, and `smoke:install` for each Pi and Node pair above. The `*` peer range is packaging convention, not a claim of wider support. Pi's own engine range (`>=22.19.0`) is not evidence either: other Node versions have not been tested.
 
@@ -224,16 +225,30 @@ On both Pi releases, with Node 22.22.0:
 - `spike/shortcut.py` passes, including Ctrl+R bound to each of Pi's 18 reserved actions: Pi warns and skips the shortcut, and `/history` still opens. For `app.exit`, `app.suspend`, and `app.editor.external`, Ctrl+R itself was not pressed.
 - `spike/pause.py` and `npm run spike` pass.
 
+After the MIT license change, `npm run lint`, `npm run typecheck`, `npm test`, `npm run check:package`, and `npm run smoke:install` were rerun and pass on both Pi releases with Node 22.22.0; the Node 24.21.0 results above predate it. The documented install was also checked from a fresh clone, with isolated home and agent directories: `pi install` on the checkout, with no `node_modules`, records it in `settings.json` and `pi list` shows it. That check does not load the extension; `smoke:install` covers loading, for the packed package.
+
 The automated tests cover capture, search, storage, and lifecycle; Unicode and punctuation matching; the 32,768-byte boundary; retention and compaction; rereading a file other processes changed; the newest-100 cap over all retained records; confirmations; config fallback and reload; and the unavailable state without stale results. They use a [minimal host harness](#development), not a Pi runtime.
 
 ### Unverified
 
 Not checked, so not claimed:
 
-- CI itself: the workflow has not run on Ubuntu yet, and the real-TUI checks run only locally, on macOS with Node 22.22.0.
+- `npm run spike` and `spike/acceptance.py` on Ubuntu: they run only locally, on macOS with Node 22.22.0. CI on Ubuntu runs lint, typecheck, `npm test`, `check:package`, and `smoke:install` for each Pi and Node pair; it last passed on 2026-09-29 at commit `bfb52b8`, before the license change.
 - Physical IME composition and candidate windows; the PTY sends committed text only. How themes look, and switching themes while Pi runs. Terminal emulators, tmux or screen, and keys that need the Kitty keyboard protocol (`super`, `ctrl+shift`).
 - Real images: clipboard paste, drag and drop, and CLI image arguments. The warning was checked with an image path typed into the draft.
 - Real model providers. The scripted model drives Pi's real agent loop, queues, and compaction, but not HTTP, retries in the TUI, or automatic (threshold or overflow) compaction in the TUI.
 - Pi delivering `session_shutdown` twice to one runtime; only the host harness tests a repeated shutdown.
 - Several real Pi processes appending at once; `test/concurrency.test.ts` uses several Node processes.
 - Other editor extensions than `modal-editor.ts`, installing from git, Windows, and any Pi release, Node version, or platform not in the table above.
+
+## Contributing and support
+
+This is a small personal project maintained on a best-effort basis, with no support commitment or response time. Bug reports and pull requests are welcome through GitHub issues; include your Pi, Node, and platform versions. Never paste prompt history, `history.jsonl` contents, or secrets into an issue. Pull requests should pass the [development checks](#development) and keep the README's claims matched to what was verified.
+
+## Security
+
+Report vulnerabilities privately, not in a public issue; see [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE)
