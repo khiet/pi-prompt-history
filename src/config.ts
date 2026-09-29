@@ -19,12 +19,12 @@ export const DEFAULT_SHORTCUT: KeyId = "ctrl+r";
 export type Config = {
 	shortcut: KeyId;
 	configFile: string;
-	/** Why the file was ignored; the defaults above apply instead. */
+	/** Why the file was ignored, leaving `shortcut` at DEFAULT_SHORTCUT. */
 	problem?: string;
 };
 
 /**
- * Reads the global config once. Never throws: a missing file means defaults,
+ * Reads the global config file. Never throws: a missing file means defaults,
  * and an unreadable or invalid one means defaults plus a `problem` that names
  * the fault without quoting the file's contents.
  */
