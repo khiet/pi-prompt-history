@@ -98,9 +98,11 @@ export default function promptHistory(pi: ExtensionAPI): void {
 
 	// Loads fresh on every opening, so the picker never shows cached records.
 	const load = async (cwd: string): Promise<PickerContent> => {
-		const { history, historyFile } = openStore();
+		let historyFile = "prompt history";
 		try {
-			return { kind: "records", records: await history.search({ cwd }) };
+			const opened = openStore();
+			historyFile = opened.historyFile;
+			return { kind: "records", records: await opened.history.search({ cwd }) };
 		} catch (error) {
 			return {
 				kind: "unavailable",

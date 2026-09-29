@@ -7,7 +7,7 @@
 Type `/history` in Pi's interactive TUI. A picker opens with an empty query, listing the newest 100 prompts recorded in the current directory (the exact cwd string), newest first.
 
 - Up/Down selects. Typing filters to prompts containing the query, ignoring case.
-- Enter puts the selected prompt in the editor without sending it. It **replaces the whole draft**. If the draft contains an image (Pi keeps a pasted or dropped image as a `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, or `.bmp` file path in the text), you are asked to confirm first, because the image is replaced too. Images from the recalled prompt were never stored and are not restored.
+- Enter puts the selected prompt in the editor without sending it. It **replaces the whole draft**. If the draft contains an image (Pi keeps a pasted or dropped image as a `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, or `.bmp` file path in the text), you are asked to confirm first, because the image is replaced too. The check looks only for such paths in the draft text, so it also asks when you merely typed a name like `logo.png`, and it cannot see an image Pi holds any other way. Images from the recalled prompt were never stored and are not restored.
 - Escape closes the picker and leaves the draft, including any image, unchanged.
 
 Restored text is the stored text as Pi's editor normalizes it: tabs become spaces and CR/CRLF become LF. The stored record itself is never changed. The list shows each prompt on one line with terminal control characters drawn as visible symbols; the restored text keeps them.

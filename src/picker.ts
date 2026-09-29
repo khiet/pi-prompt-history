@@ -12,7 +12,7 @@ import {
 import type { HistoryRecord } from "./history.ts";
 
 /** The picker never shows more than this many entries. */
-export const MAX_RESULTS = 100;
+const MAX_RESULTS = 100;
 const VISIBLE_ROWS = 10;
 
 /** What the picker shows; loading and file access happen before it opens. */
