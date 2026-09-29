@@ -7,6 +7,7 @@ import {
 	type Focusable,
 	Input,
 	type Keybinding,
+	matchesKey,
 	SelectList,
 	truncateToWidth,
 } from "@earendil-works/pi-tui";
@@ -26,6 +27,13 @@ export type PickerContent =
 
 export type PickerSearch = (request: SearchRequest) => Promise<PickerContent>;
 
+export type RemoveOutcome =
+	| { kind: "removed" }
+	| { kind: "failed"; guidance: string };
+
+/** Deletes one record from storage; must resolve, reporting failures. */
+export type PickerRemove = (record: HistoryRecord) => Promise<RemoveOutcome>;
+
 export type PickerOptions = {
 	/** The directory the picker opens scoped to. */
 	cwd: string;
@@ -33,6 +41,8 @@ export type PickerOptions = {
 	initial: PickerContent;
 	/** Must resolve, reporting failures as unavailable content. */
 	search: PickerSearch;
+	/** Runs only after the user confirms deleting the selected record. */
+	remove: PickerRemove;
 	theme: Theme;
 	keybindings: KeybindingsManager;
 	requestRender(): void;
@@ -43,7 +53,9 @@ export type PickerOptions = {
 /**
  * History picker for `ctx.ui.custom()`. Each query or scope change runs a new
  * search; only the latest one's results are shown. Selection hands back the
- * stored text untouched; only its display is made safe.
+ * stored text untouched; only its display is made safe. Ctrl+D asks before
+ * deleting the selected record, then searches again with the same query and
+ * scope, keeping the selection's position.
  */
 export function createPicker(options: PickerOptions): Component & Focusable {
 	const { theme, keybindings, done } = options;
@@ -59,6 +71,12 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 	// Enter pressed mid-search applies to the results the user is waiting for,
 	// unless another key arrives first.
 	let confirmWhenSettled = false;
+	// The record Ctrl+D asked about, awaiting y or any other key.
+	let askingToDelete: HistoryRecord | undefined;
+	// From the confirmed deletion until the results without it arrive.
+	let deleting = false;
+	// A failed deletion's guidance, shown until the next key.
+	let problem: string | undefined;
 
 	const listTheme = {
 		selectedPrefix: (text: string) => theme.fg("accent", text),
@@ -106,7 +124,8 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 	};
 	setResults(options.initial);
 
-	const refresh = () => {
+	/** `keepPosition` selects that index, or the last result when past the end. */
+	const refresh = (keepPosition?: number) => {
 		const id = ++latestSearch;
 		searching = true;
 		void options
@@ -117,13 +136,43 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 			.then((next) => {
 				if (id !== latestSearch) return;
 				searching = false;
+				deleting = false;
 				setResults(next);
+				if (keepPosition !== undefined) list?.setSelectedIndex(keepPosition);
 				if (confirmWhenSettled) {
 					confirmWhenSettled = false;
 					confirm();
 				}
 				options.requestRender();
 			});
+	};
+
+	const remove = (record: HistoryRecord) => {
+		const position =
+			content.kind === "records"
+				? content.records.findIndex(({ id }) => id === record.id)
+				: 0;
+		deleting = true;
+		void options.remove(record).then((outcome) => {
+			if (outcome.kind === "removed") return refresh(position);
+			deleting = false;
+			problem = outcome.guidance;
+			options.requestRender();
+		});
+	};
+
+	const footer = () => {
+		if (deleting) return theme.fg("dim", "Deleting...");
+		if (askingToDelete)
+			return theme.fg(
+				"warning",
+				"Delete this prompt? y delete  any other key keep",
+			);
+		const toggle = allDirectories ? "this directory" : "all directories";
+		return theme.fg(
+			"dim",
+			`${keyName("tui.select.up")}/${keyName("tui.select.down")} select  ${keyName("tui.input.tab")} ${toggle}  ctrl+d delete  ${keyName("tui.select.confirm")} restore  ${keyName("tui.select.cancel")} cancel`,
+		);
 	};
 
 	const keyName = (binding: Keybinding) =>
@@ -181,15 +230,12 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 		},
 		render(width) {
 			const scope = allDirectories ? "all directories" : "this directory";
-			const toggle = allDirectories ? "this directory" : "all directories";
 			return [
 				theme.fg("accent", `Prompt history: ${scope}`),
 				...input.render(width),
 				...body(width),
-				theme.fg(
-					"dim",
-					`${keyName("tui.select.up")}/${keyName("tui.select.down")} select  ${keyName("tui.input.tab")} ${toggle}  ${keyName("tui.select.confirm")} restore  ${keyName("tui.select.cancel")} cancel`,
-				),
+				...(problem ? [theme.fg("error", `  ${problem}`)] : []),
+				footer(),
 			].map((line) => truncateToWidth(line, width, ""));
 		},
 		invalidate() {
@@ -197,6 +243,26 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 			list?.invalidate();
 		},
 		handleInput(data) {
+			problem = undefined;
+			// Only cancel works until the deletion's results arrive.
+			if (deleting) {
+				if (keybindings.matches(data, "tui.select.cancel")) done(undefined);
+				return;
+			}
+			if (askingToDelete) {
+				const record = askingToDelete;
+				askingToDelete = undefined;
+				if (data === "y" || data === "Y") remove(record);
+				options.requestRender();
+				return;
+			}
+			if (matchesKey(data, "ctrl+d")) {
+				// Mid-search, the selection may be about to change under the question.
+				if (!searching) askingToDelete = selected();
+				confirmWhenSettled = false;
+				options.requestRender();
+				return;
+			}
 			const confirming = keybindings.matches(data, "tui.select.confirm");
 			if (!confirming) confirmWhenSettled = false;
 			if (keybindings.matches(data, "tui.select.cancel")) done(undefined);

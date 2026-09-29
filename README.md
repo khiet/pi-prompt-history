@@ -1,6 +1,6 @@
 # pi-prompt-history
 
-**Development only - not a release.** A Pi extension that records the prompts you type to a local JSONL file and searches them with Ctrl+R or `/history`. Deletion is not built yet; it arrives with [#8](https://github.com/khiet/pi-prompt-history/issues/8). [The PRD](https://github.com/khiet/pi-prompt-history/issues/1) is the full contract. The package is `private` and must not be published.
+**Development only - not a release.** A Pi extension that records the prompts you type to a local JSONL file and searches them with Ctrl+R or `/history`. [The PRD](https://github.com/khiet/pi-prompt-history/issues/1) is the full contract. The package is `private` and must not be published.
 
 ## Usage
 
@@ -11,6 +11,7 @@ Press Ctrl+R (or your [configured shortcut](#shortcut)) or type `/history` in Pi
 - Tab switches between this directory and all directories, keeping the query. In all directories, each prompt shows the directory it was typed in.
 - Up/Down selects. Below the list, a preview shows the selected prompt's local time and its first lines.
 - Enter puts the selected prompt in the editor without sending it. It **replaces the whole draft**. If the draft contains an image (Pi keeps a pasted or dropped image as a `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, or `.bmp` file path in the text), you are asked to confirm first, because the image is replaced too. The check looks only for such paths in the draft text, so it also asks when you merely typed a name like `logo.png`, and it cannot see an image Pi holds any other way. Images from the recalled prompt were never stored and are not restored.
+- Ctrl+D asks before deleting the selected prompt; see [Delete and clear](#delete-and-clear).
 - Escape closes the picker and leaves the draft, including any image, unchanged.
 
 Restored text is the stored text as Pi's editor normalizes it: tabs become spaces and CR/CRLF become LF. The stored record itself is never changed. The list shows each prompt on one line and the preview up to eight of its lines, both with terminal control characters drawn as visible symbols; the restored text keeps them.
@@ -19,12 +20,25 @@ The picker distinguishes no prompts recorded in the scope from no prompts matchi
 
 ## Pause
 
-`/history pause` stops recording new prompts; `/history resume` starts again. Any other argument to `/history` shows usage and does nothing.
+`/history pause` stops recording new prompts; `/history resume` starts again. Any argument to `/history` other than these and the [clear scopes](#delete-and-clear) shows usage and does nothing.
 
 - While paused, the footer shows `history paused`. Saved history stays searchable and restorable with Ctrl+R and `/history`.
 - The pause lasts for the whole Pi process: it survives `/reload`, `/new`, `/resume`, and `/fork`, and the indicator comes back after each. Only `/history resume` or restarting Pi turns recording back on. It is never saved to disk, so a new Pi process always starts recording.
 - It affects this extension only. It does not stop Pi from saving its own session files, and it does not remove prompts already recorded.
 - Prompts typed while paused are never recorded later; resuming does not backfill them.
+
+## Delete and clear
+
+In the picker, Ctrl+D asks `Delete this prompt?`. `y` deletes the selected record; any other key, Escape included, keeps it and leaves the picker open. Only that one record goes: other submissions of the same text are separate records and stay. There is no undo. Ctrl+D pressed while a search is still loading does nothing. After a deletion the picker searches again with the same query and scope, selects the result that took the deleted one's place (or the new last result when the last one was deleted), and refills the newest-100 list, so a prompt that was just past the cap appears. When nothing is left it says `No prompts match.` or `No prompts recorded in this directory yet.`
+
+`/history clear cwd` clears the current directory's prompts, matched by the exact cwd string like the picker's scope, so other directories and subdirectories keep theirs. `/history clear all` clears every prompt this extension recorded. Bare `/history clear` or any other scope shows usage and clears nothing. Both ask for confirmation, naming the scope and how many prompts it holds; cancelling changes nothing, and an empty scope says there is nothing to clear without asking. Both work only in the TUI.
+
+The count in the confirmation is the count when it was shown. Clearing removes whatever is in scope when it runs, so prompts recorded by other Pi processes while the dialog was open are cleared too, and the notice after it reports the count actually cleared.
+
+- Deleting and clearing affect only this extension's history file. They never change Pi's session files, where the same prompts remain.
+- They rewrite the file (see [Limits](#limits)); this does not guarantee forensic erasure from the disk, filesystem snapshots, or backups.
+- If the file cannot be read or rewritten, nothing is deleted or cleared, and the picker or a warning names the file, its directory, and the error code. The draft is untouched and prompting continues.
+- A picker or confirmation left open by a session that has since shut down deletes nothing.
 
 ## Shortcut
 
@@ -60,7 +74,7 @@ Loading the extension adds a **second, plain-text copy** of your typed prompts, 
 <agent dir>/prompt-history/history.jsonl
 ```
 
-`<agent dir>` is Pi's `getAgentDir()`: `~/.pi/agent` by default, or `PI_CODING_AGENT_DIR` when set. Anything you type, including secrets pasted into a prompt, is kept there until you remove it. Use [`/history pause`](#pause) before typing something you do not want kept. There is no delete yet, so the only way to remove entries is to edit or delete that file yourself. Deleting it does not touch Pi's sessions and does not guarantee erasure from backups or disk.
+`<agent dir>` is Pi's `getAgentDir()`: `~/.pi/agent` by default, or `PI_CODING_AGENT_DIR` when set. Anything you type, including secrets pasted into a prompt, is kept there until you remove it. Use [`/history pause`](#pause) before typing something you do not want kept. Remove entries with [Ctrl+D in the picker or `/history clear`](#delete-and-clear), or by deleting that file yourself. None of these touch Pi's sessions or guarantee erasure from backups or disk.
 
 - The directory is created with mode `0700` and the file with `0600` where the platform supports it. Existing permissions are not changed.
 - History is never exposed to the model: no tool, no context injection.
@@ -109,13 +123,13 @@ These are fixed, not configurable:
 - **Results:** at most the newest 100 matches per search, over every retained record.
 - **Prompt size:** 32,768 UTF-8 bytes; larger prompts are skipped.
 
-A rewrite writes a private (`0600`) temporary file in the same directory and renames it over the history file. If preparing it fails, the temporary file is removed, the original stays as it was, and a warning names the file, its directory, and the error code; the next append past the threshold tries again. An unreadable history file is never rewritten.
+Compaction, deletion, and clearing all rewrite the file the same way, and every rewrite keeps at most the newest 10,000 records and drops unreadable lines. A rewrite writes a private (`0600`) temporary file in the same directory and renames it over the history file. If preparing it fails, the temporary file is removed, the original stays as it was, and a warning names the file, its directory, and the error code; for compaction, the next append past the threshold tries again. An unreadable history file is never rewritten. A deletion of a record that is already gone rewrites nothing.
 
 ## Several Pi processes
 
 Every Pi process with this extension appends to the same file. Each record is one write in append mode, which keeps lines whole on a local filesystem; network filesystems are not supported and may interleave or lose lines. Repeated prompts from different processes are all kept.
 
-There is no locking. The one known loss is a rewrite: another process's append that lands between the rewrite reading the file and renaming over it, or that opened the old file before the rename, is lost. This happens only around the rare compaction rewrite and is accepted for the MVP; rewrites are not lossless under concurrency.
+There is no locking. The one known loss is a rewrite (compaction, deletion, or clearing): another process's append that lands between the rewrite reading the file and renaming over it, or that opened the old file before the rename, is lost. The window is short and is accepted for the MVP; rewrites are not lossless under concurrency.
 
 ## Failures
 
@@ -145,7 +159,7 @@ Layout:
 - `src/history.ts`: the JSONL store. File I/O only; knows nothing about Pi.
 - `src/picker.ts`: the search picker, composed from Pi's `Input` and `SelectList`. No file I/O.
 - `src/config.ts`: store and config paths from `getAgentDir()`, and the validated shortcut setting.
-- `test/`: behavior tests. `concurrency.test.ts` runs the store in several Node processes at once. `harness.ts` is a minimal host that records registered handlers and fires events at them; it is not a Pi runtime.
+- `test/`: behavior tests. `delete.test.ts` and `clear.test.ts` cover deletion through the picker and `/history clear`. `concurrency.test.ts` runs the store in several Node processes at once. `harness.ts` is a minimal host that records registered handlers and fires events at them; it is not a Pi runtime.
 - `spike/` and `docs/research/`: the compatibility spike (`npm run spike`) and research that shaped the design. `spike/shortcut.py` drives the real extension in real Pi to check the shortcut, its config, reload, and `/history`. `spike/pause.py` does the same for pause, with `spike/driver.ts` swallowing prompts so no model is called.
 
 The extension registers handlers and reads `config.json` once to register the shortcut; it opens the history file only at the first eligible prompt or search. Each Pi session runtime (startup, `/reload`, `/new`, `/resume`, `/fork`) gets a fresh extension instance, and `session_shutdown` stops capture, waits for pending writes, and closes the store, so a replaced runtime never records, and a picker still open when its session shuts down restores nothing. The pause flag is the one thing kept across runtimes: it lives on `globalThis` under `Symbol.for("pi-prompt-history/process-state")`, because Pi documents no process-lifetime state. This relies on Pi reusing one Node realm for every runtime in a process, which Pi does not promise, so `spike/pause.py` must pass on every supported Pi release.
@@ -177,6 +191,7 @@ Not verified, and required before any release:
 - Lifecycle races in real Pi: repeated shutdown delivery and writes still pending during session replacement.
 - Real attachments: clipboard and drag-and-drop images alongside text, and the image warning before `/history` replaces such a draft.
 - The search shortcut in terminals other than the PTY check above: other terminal emulators, `super` and `ctrl+shift` keys (which need the Kitty keyboard protocol), tmux/screen, and reserved actions other than `app.clear`.
-- The picker in the real TUI: restoration and editor normalization, cancellation, IME composition, themes, resizing, and narrow terminals.
+- The picker in the real TUI: restoration and editor normalization, cancellation, Ctrl+D deletion and its confirmation, IME composition, themes, resizing, and narrow terminals.
+- `/history clear cwd` and `/history clear all` with Pi's real confirmation dialog.
 - Concurrent appends from several real Pi processes. `test/concurrency.test.ts` covers several Node processes sharing the store, not several Pi instances.
 - Any Pi release other than 0.85.1 and 0.87.1, and any other Node version or platform.

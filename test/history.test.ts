@@ -137,6 +137,7 @@ describe("history store", () => {
 			records: [],
 			capped: false,
 			malformed: 0,
+			total: 0,
 		});
 		await history.close();
 		await assert.rejects(stat(paths.dir), { code: "ENOENT" });
@@ -519,5 +520,177 @@ describe("history search", () => {
 		const result = await openHistory(paths).search({ query: "" });
 		assert.equal(result.records.length, 100);
 		assert.equal(result.capped, false);
+	});
+});
+
+describe("history deletion", () => {
+	const seed = async (
+		records: { id: string; text: string; ts: number; cwd?: string }[],
+	) => {
+		await mkdir(paths.dir, { recursive: true });
+		await writeFile(
+			paths.historyFile,
+			records
+				.map(({ id, text, ts, cwd }) =>
+					line({ id, text, ts, cwd: cwd ?? "/work/a" }),
+				)
+				.join(""),
+		);
+	};
+
+	const stored = async () =>
+		(await readFile(paths.historyFile, "utf8"))
+			.split("\n")
+			.filter((l) => l !== "")
+			.map((l) => JSON.parse(l) as { id: string; cwd: string });
+
+	test("deletes one record and keeps other submissions of the same text", async () => {
+		await seed([
+			{ id: "first", text: "same text", ts: 1 },
+			{ id: "second", text: "same text", ts: 2 },
+			{ id: "other", text: "other", ts: 3 },
+		]);
+		const history = openHistory(paths);
+
+		assert.equal(await history.delete("second"), true);
+		await history.close();
+
+		assert.deepEqual(
+			(await stored()).map((record) => record.id),
+			["first", "other"],
+		);
+	});
+
+	test("deleting a record that is already gone changes nothing", async () => {
+		await seed([{ id: "kept", text: "kept", ts: 1 }]);
+		const before = await stat(paths.historyFile);
+		const history = openHistory(paths);
+
+		assert.equal(await history.delete("missing"), false);
+		await history.close();
+
+		assert.equal((await stat(paths.historyFile)).ino, before.ino);
+		assert.deepEqual(
+			(await stored()).map((record) => record.id),
+			["kept"],
+		);
+	});
+
+	test("clearing a cwd removes only records with that exact cwd string", async () => {
+		await seed([
+			{ id: "a1", text: "x", ts: 1 },
+			{ id: "b", text: "x", ts: 2, cwd: "/work/b" },
+			{ id: "sub", text: "x", ts: 3, cwd: "/work/a/sub" },
+			{ id: "a2", text: "x", ts: 4 },
+		]);
+		const history = openHistory(paths);
+
+		assert.equal(await history.clear({ cwd: "/work/a" }), 2);
+		await history.close();
+
+		assert.deepEqual(
+			(await stored()).map((record) => record.id),
+			["b", "sub"],
+		);
+	});
+
+	test("clearing every directory removes every record, malformed lines too", async () => {
+		await seed([
+			{ id: "a", text: "x", ts: 1 },
+			{ id: "b", text: "x", ts: 2, cwd: "/work/b" },
+		]);
+		await appendFile(paths.historyFile, "torn line\n");
+		const history = openHistory(paths);
+
+		assert.equal(await history.clear({}), 2);
+		await history.close();
+
+		assert.equal(await readFile(paths.historyFile, "utf8"), "");
+	});
+
+	test("clearing counts records another writer appended after the last search", async () => {
+		await seed([{ id: "a", text: "x", ts: 1 }]);
+		const history = openHistory(paths);
+		assert.equal(
+			(await history.search({ query: "", cwd: "/work/a" })).total,
+			1,
+		);
+		await appendFile(paths.historyFile, line({ id: "late", ts: 2 }));
+
+		assert.equal(await history.clear({ cwd: "/work/a" }), 2);
+		assert.equal((await history.search({ query: "" })).total, 0);
+		await history.close();
+	});
+
+	test("a deletion rewrites privately and keeps the newest 10,000", {
+		skip: skipPermissionTests,
+	}, async () => {
+		await seed(
+			Array.from({ length: 10_500 }, (_, i) => ({
+				id: `id-${String(i + 1).padStart(5, "0")}`,
+				text: "x",
+				ts: i + 1,
+			})),
+		);
+		await chmod(paths.historyFile, 0o644);
+		const history = openHistory(paths);
+
+		assert.equal(await history.delete("id-10500"), true);
+		await history.close();
+
+		const ids = (await stored()).map((record) => record.id);
+		assert.equal(ids.length, 10_000);
+		assert.equal(ids[0], "id-00500");
+		assert.equal(ids.at(-1), "id-10499");
+		assert.equal((await stat(paths.historyFile)).mode & 0o777, 0o600);
+		assert.deepEqual(await readdir(paths.dir), ["history.jsonl"]);
+	});
+
+	test("a failed rewrite rejects and leaves the file and search unchanged", {
+		skip: skipPermissionTests,
+	}, async () => {
+		await seed([
+			{ id: "a", text: "x", ts: 1 },
+			{ id: "b", text: "x", ts: 2, cwd: "/work/b" },
+		]);
+		const history = openHistory(paths);
+		await chmod(paths.dir, 0o500);
+		try {
+			await assert.rejects(history.delete("a"), { code: "EACCES" });
+			await assert.rejects(history.clear({}), { code: "EACCES" });
+		} finally {
+			await chmod(paths.dir, 0o700);
+		}
+
+		assert.deepEqual(await readdir(paths.dir), ["history.jsonl"]);
+		assert.equal((await history.search({ query: "" })).total, 2);
+		await history.close();
+		assert.equal((await stored()).length, 2);
+	});
+
+	test("never rewrites an unreadable file", {
+		skip: skipPermissionTests,
+	}, async () => {
+		await seed([{ id: "a", text: "x", ts: 1 }]);
+		const history = openHistory(paths);
+		await chmod(paths.historyFile, 0o200);
+		try {
+			await assert.rejects(history.delete("a"), { code: "EACCES" });
+			await assert.rejects(history.clear({}), { code: "EACCES" });
+		} finally {
+			await chmod(paths.historyFile, 0o600);
+		}
+		await history.close();
+		assert.equal((await stored()).length, 1);
+	});
+
+	test("refuses deletion after close", async () => {
+		await seed([{ id: "a", text: "x", ts: 1 }]);
+		const history = openHistory(paths);
+		await history.close();
+
+		await assert.rejects(history.delete("a"));
+		await assert.rejects(history.clear({}));
+		assert.equal((await stored()).length, 1);
 	});
 });

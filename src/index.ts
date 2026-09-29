@@ -12,7 +12,11 @@ import {
 	MAX_RECORDS,
 	openHistory,
 } from "./history.ts";
-import { createPicker, type PickerSearch } from "./picker.ts";
+import {
+	createPicker,
+	type PickerRemove,
+	type PickerSearch,
+} from "./picker.ts";
 
 const WARNING_INTERVAL_MS = 60_000;
 
@@ -47,7 +51,8 @@ function processState(): ProcessState {
 
 const STATUS_KEY = "prompt-history";
 const PAUSED_STATUS = "history paused";
-const USAGE = "Usage: /history, /history pause, or /history resume.";
+const USAGE =
+	"Usage: /history, /history pause, /history resume, /history clear cwd, or /history clear all.";
 
 /**
  * Pi runs this factory once per session runtime: at startup and again after
@@ -175,6 +180,28 @@ export default function promptHistory(pi: ExtensionAPI): void {
 			}
 		};
 
+	// A picker left open by a session that shut down deletes nothing.
+	const remove: PickerRemove = async (record) => {
+		if (!live)
+			return {
+				kind: "failed",
+				guidance: "This session has ended; nothing was deleted.",
+			};
+		let historyFile = "prompt history";
+		try {
+			const opened = openStore();
+			historyFile = opened.historyFile;
+			// A record another process already removed counts as deleted.
+			await opened.history.delete(record.id);
+			return { kind: "removed" };
+		} catch (error) {
+			return {
+				kind: "failed",
+				guidance: `Could not delete from ${historyFile} (${errorCode(error)}). Check that the file is readable and ${dirname(historyFile)} is writable; nothing was deleted.`,
+			};
+		}
+	};
+
 	const recall = async (ctx: ExtensionContext) => {
 		const search = searchFor(ctx);
 		const initial = await search({ query: "", cwd: ctx.cwd });
@@ -185,6 +212,7 @@ export default function promptHistory(pi: ExtensionAPI): void {
 					cwd: ctx.cwd,
 					initial,
 					search,
+					remove,
 					theme,
 					keybindings,
 					requestRender: () => tui.requestRender(),
@@ -231,14 +259,60 @@ export default function promptHistory(pi: ExtensionAPI): void {
 		tryUI(() => ctx.ui.notify(message, "info"));
 	};
 
+	/**
+	 * Confirms with the count in scope now, then clears whatever is in scope
+	 * when the rewrite runs, so the reported count can differ from the
+	 * confirmed one when other processes record in between.
+	 */
+	const clear = async (cwd: string | undefined, ctx: ExtensionContext) => {
+		if (!live || ctx.mode !== "tui") return;
+		const scope = cwd === undefined ? "all directories" : cwd;
+		let historyFile = "prompt history";
+		try {
+			const opened = openStore();
+			historyFile = opened.historyFile;
+			const { total } = await opened.history.search({ query: "", cwd });
+			if (!live) return;
+			if (total === 0) {
+				tryUI(() =>
+					ctx.ui.notify(
+						`No prompts recorded in ${scope}; nothing to clear.`,
+						"info",
+					),
+				);
+				return;
+			}
+			const confirmed = await ctx.ui.confirm(
+				"Clear prompt history?",
+				`Delete ${plural(total)} recorded in ${scope} from ${historyFile}? Prompts recorded meanwhile are cleared too. This cannot be undone, and Pi's session files are not changed.`,
+			);
+			if (!confirmed || !live) return;
+			const removed = await opened.history.clear({ cwd });
+			if (live)
+				tryUI(() =>
+					ctx.ui.notify(`Cleared ${plural(removed)} from ${scope}.`, "info"),
+				);
+		} catch (error) {
+			if (live)
+				tryUI(() =>
+					ctx.ui.notify(
+						`Prompt history could not clear ${historyFile} (${errorCode(error)}). Check that the file is readable and ${dirname(historyFile)} is writable; nothing was cleared. Prompting is unaffected.`,
+						"warning",
+					),
+				);
+		}
+	};
+
 	pi.registerCommand("history", {
 		description:
-			"Search recorded prompts and restore one into the editor; pause or resume recording",
+			"Search recorded prompts and restore one into the editor; pause or resume recording; clear cwd or all history",
 		handler: async (args, ctx) => {
-			const action = args.trim();
+			const action = args.trim().split(/\s+/).join(" ");
 			if (action === "") return openPicker(ctx);
 			if (action === "pause" || action === "resume")
 				return setPaused(action === "pause", ctx);
+			if (action === "clear cwd") return clear(ctx.cwd, ctx);
+			if (action === "clear all") return clear(undefined, ctx);
 			if (live) tryUI(() => ctx.ui.notify(USAGE, "warning"));
 		},
 	});
@@ -280,6 +354,10 @@ function isEligible(event: InputEvent, ctx: ExtensionContext): boolean {
 		!!ctx.sessionManager.getSessionFile() &&
 		event.text.trim() !== ""
 	);
+}
+
+function plural(count: number): string {
+	return `${count} ${count === 1 ? "prompt" : "prompts"}`;
 }
 
 /** An error's code, or a fixed label; never its message, which may quote input. */
