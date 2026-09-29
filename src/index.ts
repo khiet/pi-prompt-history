@@ -13,8 +13,8 @@ const WARNING_INTERVAL_MS = 60_000;
 type WarningKind = "too-large" | "write-failed" | "capture-failed";
 
 /**
- * Pi keeps a pasted or dropped image in the draft as its file path; these are
- * the image types Pi's read tool attaches.
+ * Pi keeps a pasted image in the draft as its file path; these are the image
+ * types Pi's read tool attaches.
  */
 const IMAGE_PATH = /\.(?:png|jpe?g|gif|webp|bmp)(?=$|[\s'"])/im;
 

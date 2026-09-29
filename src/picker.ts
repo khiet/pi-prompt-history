@@ -11,7 +11,6 @@ import {
 } from "@earendil-works/pi-tui";
 import type { HistoryRecord } from "./history.ts";
 
-/** The picker never shows more than this many entries. */
 const MAX_RESULTS = 100;
 const VISIBLE_ROWS = 10;
 
@@ -30,8 +29,8 @@ export type PickerOptions = {
 };
 
 /**
- * Current-directory history picker for `ctx.ui.custom()`. Records must arrive
- * newest first. Selection hands back the stored text untouched; only its
+ * History picker for `ctx.ui.custom()`. Records must arrive newest first; the
+ * first 100 that match the query are offered. Selection hands back the stored text untouched; only its
  * display is made safe.
  */
 export function createPicker(options: PickerOptions): Component & Focusable {
