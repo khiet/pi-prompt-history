@@ -32,7 +32,7 @@ export type History = {
 };
 
 /** Performs no I/O until the first record or search. */
-export function openHistory(paths: StorePaths, now = Date.now): History {
+export function openHistory(paths: StorePaths): History {
 	let closed = false;
 	let directoryReady = false;
 	// Appends run one at a time so lines land in submission order.
@@ -59,7 +59,7 @@ export function openHistory(paths: StorePaths, now = Date.now): History {
 				text: entry.text,
 				cwd: entry.cwd,
 				session: entry.session,
-				ts: now(),
+				ts: Date.now(),
 			};
 			const write = pending.then(() => append(`${JSON.stringify(record)}\n`));
 			pending = write.catch(() => {});

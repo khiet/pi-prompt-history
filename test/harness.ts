@@ -58,8 +58,7 @@ export function loadExtension(): Host {
 	const api = new Proxy(
 		{},
 		{
-			get: (_, property) =>
-				property === "on" ? record("on") : record(String(property)),
+			get: (_, property) => record(String(property)),
 		},
 	) as ExtensionAPI;
 
@@ -123,6 +122,10 @@ export function loadExtension(): Host {
 		},
 	};
 }
+
+/** Permission tests are meaningless for root, which bypasses file modes. */
+export const skipPermissionTests =
+	process.getuid?.() === 0 || process.platform === "win32";
 
 /** Points getAgentDir() at a fresh temporary directory for one test. */
 export async function useAgentDir(): Promise<{

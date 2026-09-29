@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
-import { type Host, loadExtension, useAgentDir } from "./harness.ts";
+import {
+	type Host,
+	loadExtension,
+	skipPermissionTests,
+	useAgentDir,
+} from "./harness.ts";
 
 let store: Awaited<ReturnType<typeof useAgentDir>>;
 let host: Host;
@@ -24,8 +29,6 @@ const exists = (path: string) =>
 	);
 
 const texts = async () => (await store.readLines()).map((line) => line.text);
-
-const isRoot = process.getuid?.() === 0;
 
 describe("capture", () => {
 	test("records typed TUI input as one version-1 line and continues", async () => {
@@ -210,7 +213,7 @@ describe("storage", () => {
 	});
 
 	test("leaves an unwritable history file in place rather than recreating it", {
-		skip: isRoot || process.platform === "win32",
+		skip: skipPermissionTests,
 	}, async () => {
 		await mkdir(dirname(store.historyFile), { recursive: true });
 		await writeFile(store.historyFile, "existing line\n");

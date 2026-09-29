@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import type { StorePaths } from "../src/config.ts";
 import { openHistory } from "../src/history.ts";
+import { skipPermissionTests } from "./harness.ts";
 
 let root: string;
 let paths: StorePaths;
@@ -127,7 +128,7 @@ describe("history store", () => {
 	});
 
 	test("rejects when the file is unreadable and leaves it untouched", {
-		skip: process.getuid?.() === 0 || process.platform === "win32",
+		skip: skipPermissionTests,
 	}, async () => {
 		await mkdir(paths.dir, { recursive: true });
 		await writeFile(paths.historyFile, line({ id: "a" }));
