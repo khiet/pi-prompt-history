@@ -92,20 +92,20 @@ describe("pause and resume", () => {
 		assert.deepEqual(await texts(), ["recorded"]);
 	});
 
-	for (const reason of ["reload", "new", "resume", "fork"])
-		test(`pause survives ${reason} with its status restored`, async () => {
-			await host.command("history", "pause");
+	test("pause survives reload, new, resume, and fork with its status restored", async () => {
+		await host.command("history", "pause");
+		for (const reason of ["reload", "new", "resume", "fork"]) {
 			await replaceRuntime(reason);
-
-			assert.equal(status(), PAUSED);
+			assert.equal(status(), PAUSED, `status after ${reason}`);
 			await host.input({ text: `after ${reason}` });
-			await host.command("history", "resume");
-			assert.equal(status(), undefined);
-			await host.input({ text: "after resume" });
-			await host.shutdown();
+		}
+		await host.command("history", "resume");
+		assert.equal(status(), undefined);
+		await host.input({ text: "after resume" });
+		await host.shutdown();
 
-			assert.deepEqual(await texts(), ["after resume"]);
-		});
+		assert.deepEqual(await texts(), ["after resume"]);
+	});
 
 	test("a process restart starts recording again with no status", async () => {
 		await host.command("history", "pause");
@@ -118,6 +118,19 @@ describe("pause and resume", () => {
 		await host.input({ text: "after restart" });
 		await host.shutdown();
 		assert.deepEqual(await texts(), ["after restart"]);
+	});
+
+	test("a failing notice still pauses", async () => {
+		await host.command(
+			"history",
+			"pause",
+			host.context({ notifyThrows: true }),
+		);
+
+		assert.equal(status(), PAUSED);
+		await host.input({ text: "while paused" });
+		await host.shutdown();
+		assert.deepEqual(await readdir(store.agentDir), []);
 	});
 
 	test("pausing writes nothing to disk", async () => {
