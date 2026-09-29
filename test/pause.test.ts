@@ -26,7 +26,7 @@ afterEach(async () => {
 
 const PAUSED = "history paused";
 
-const status = (on = host) => on.ui.statuses.get("prompt-history");
+const status = (runtime = host) => runtime.ui.statuses.get("prompt-history");
 
 /** Replaces the runtime as Pi does on reload, new, resume, and fork. */
 const replaceRuntime = async (reason: string) => {

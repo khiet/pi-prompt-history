@@ -1,7 +1,7 @@
 """Drive the real Pi CLI with this extension in an isolated POSIX PTY: pause must
-survive /reload, new, resume, and fork with its status shown, and reset when
-the process restarts. Synthetic prompts only; spike/driver.ts swallows them so
-no model is called. This gates every supported Pi release, because the pause
+survive Pi's own /reload, /new, /resume, and /fork with its status shown, and
+reset when the process restarts. Synthetic prompts only; spike/driver.ts
+swallows them so no model is called. This gates every supported Pi release, because the pause
 relies on undocumented reuse of one Node realm across runtimes.
 """
 
@@ -68,7 +68,6 @@ class Pi:
             "PI_OFFLINE": "1",
             "PI_TELEMETRY": "0",
             "DRIVER_LOG": str(self.log),
-            "DRIVER_SEED": str(self.seed),
         }
         args = [
             shutil.which("node"),
@@ -146,6 +145,22 @@ class Pi:
         self.type(text)
         self.drain(1)
 
+    def transition(self, command, *picks):
+        """Runs a session command, answers its selector, and waits for the start."""
+        count = len(self.events("start")) + 1
+        self.type(command)
+        self.drain(1)
+        for keys in picks:
+            os.write(self.fd, keys.encode())
+            self.drain(1)
+        self.wait("start", count)
+
+    def files(self):
+        """Every file under the agent directory, with its contents."""
+        return {
+            path: path.read_bytes() for path in self.agent.rglob("*") if path.is_file()
+        }
+
     def screen(self):
         """The whole screen, redrawn by width changes, without ANSI styling."""
         mark = len(self.out)
@@ -171,16 +186,19 @@ def run(root):
     try:
         pi.prompt("before-pause")
         assert STATUS not in pi.screen(), "status shown before pause"
+        before = pi.files()
         pi.command("/history pause")
+        assert pi.files() == before, "pausing wrote to the agent directory"
         assert STATUS in pi.screen(), "no status after pause"
         pi.prompt("while-paused")
-        for command, reason in [
-            ("/reload", "reload"),
-            ("/new", "new"),
-            ("/driver resume", "resume"),
-            ("/driver fork", "fork"),
+        for reason, command, picks in [
+            ("reload", "/reload", []),
+            ("new", "/new", []),
+            # Tab lists every folder's sessions; the query picks the seed.
+            ("resume", "/resume", ["\t", "seeded", "\r"]),
+            ("fork", "/fork", ["\r"]),
         ]:
-            pi.submit(command, "start")
+            pi.transition(command, *picks)
             assert pi.events("start")[-1]["reason"] == reason, reason
             assert STATUS in pi.screen(), f"status lost after {reason}"
             pi.prompt(f"after-{reason}")

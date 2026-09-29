@@ -130,7 +130,7 @@ Layout:
 - `src/picker.ts`: the search picker, composed from Pi's `Input` and `SelectList`. No file I/O.
 - `src/config.ts`: store and config paths from `getAgentDir()`, and the validated shortcut setting.
 - `test/`: behavior tests. `harness.ts` is a minimal host that records registered handlers and fires events at them; it is not a Pi runtime.
-- `spike/` and `docs/research/`: the compatibility spike (`npm run spike`) and research that shaped the design. `spike/shortcut.py` drives the real extension in real Pi to check the shortcut, its config, reload, and `/history`. `spike/pause.py` does the same for pause, with `spike/driver.ts` switching sessions and swallowing prompts so no model is called.
+- `spike/` and `docs/research/`: the compatibility spike (`npm run spike`) and research that shaped the design. `spike/shortcut.py` drives the real extension in real Pi to check the shortcut, its config, reload, and `/history`. `spike/pause.py` does the same for pause, with `spike/driver.ts` swallowing prompts so no model is called.
 
 The extension registers handlers and reads `config.json` once to register the shortcut; it opens the history file only at the first eligible prompt or search. Each Pi session runtime (startup, `/reload`, `/new`, `/resume`, `/fork`) gets a fresh extension instance, and `session_shutdown` stops capture, waits for pending writes, and closes the store, so a replaced runtime never records, and a picker still open when its session shuts down restores nothing. The pause flag is the one thing kept across runtimes: it lives on `globalThis` under `Symbol.for("pi-prompt-history/process-state")`, because Pi documents no process-lifetime state. This relies on Pi reusing one Node realm for every runtime in a process, which Pi does not promise, so `spike/pause.py` must pass on every supported Pi release.
 
@@ -148,7 +148,7 @@ On both Pi versions, typecheck and `npm test` pass, and Pi's own extension loade
 
 On both Pi versions, `python3 spike/shortcut.py` passes in a real TUI (PTY, `TERM=xterm-256color`): Ctrl+R opens the picker instead of rename, with Pi's conflict warning; a configured Alt+H opens it and Ctrl+R then does not; an invalid config warns and falls back to Ctrl+R; with `app.clear` bound to Ctrl+R, Pi skips the shortcut and `/history` still opens; and after editing the config, the old key keeps working until `/reload`, then only the new key does.
 
-On both Pi versions, `python3 spike/pause.py` passes in the same real TUI: `/history pause` stops recording and shows `history paused`; the pause and the indicator survive `/reload`, `/new`, a resume, and a fork; `/history resume` clears the indicator and records again; and a restarted process records with no indicator, with nothing but `history.jsonl` in the store directory.
+On both Pi versions, `python3 spike/pause.py` passes in the same real TUI: `/history pause` stops recording and shows `history paused`; the pause and the indicator survive Pi's own `/reload`, `/new`, `/resume`, and `/fork`; `/history resume` clears the indicator and records again; the pause command changes no file under the agent directory; and a restarted process records with no indicator.
 
 The tests use a minimal host harness. They do not prove real-TUI streaming, replay, or lifecycle behavior. The input-hook fields, exclusions, and session transitions the capture relies on were observed in the real TUI and SDK by the [compatibility spike](docs/research/compatibility-spike.md).
 

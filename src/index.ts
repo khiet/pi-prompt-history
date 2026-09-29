@@ -178,14 +178,19 @@ export default function promptHistory(pi: ExtensionAPI): void {
 		}
 	};
 
-	// Every new runtime restores the indicator, so a pause is never out of sight.
-	const showPauseStatus = (ctx: ExtensionContext) => {
+	// UI feedback for pause is best effort, like warnings: a failure to show it
+	// never undoes a state change that already took effect.
+	const tryUI = (show: () => void) => {
 		try {
-			ctx.ui.setStatus(STATUS_KEY, state.paused ? PAUSED_STATUS : undefined);
-		} catch {
-			// Best effort, like warnings; the pause itself already took effect.
-		}
+			show();
+		} catch {}
 	};
+
+	// Every new runtime restores the indicator, so a pause is never out of sight.
+	const showPauseStatus = (ctx: ExtensionContext) =>
+		tryUI(() =>
+			ctx.ui.setStatus(STATUS_KEY, state.paused ? PAUSED_STATUS : undefined),
+		);
 
 	const setPaused = (paused: boolean, ctx: ExtensionContext) => {
 		if (!live) return;
@@ -195,11 +200,7 @@ export default function promptHistory(pi: ExtensionAPI): void {
 		const message = paused
 			? `Prompt history ${changed ? "paused" : "is already paused"}. New prompts are not recorded until /history resume or Pi restarts. Saved history stays searchable.`
 			: `Prompt history ${changed ? "resumed" : "is already recording"}. New prompts are recorded.`;
-		try {
-			ctx.ui.notify(message, "info");
-		} catch {
-			// Best effort; the new state already took effect.
-		}
+		tryUI(() => ctx.ui.notify(message, "info"));
 	};
 
 	pi.registerCommand("history", {
@@ -210,7 +211,7 @@ export default function promptHistory(pi: ExtensionAPI): void {
 			if (action === "") return openPicker(ctx);
 			if (action === "pause" || action === "resume")
 				return setPaused(action === "pause", ctx);
-			if (live) ctx.ui.notify(USAGE, "warning");
+			if (live) tryUI(() => ctx.ui.notify(USAGE, "warning"));
 		},
 	});
 
