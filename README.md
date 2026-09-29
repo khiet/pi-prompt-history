@@ -1,18 +1,21 @@
 # pi-prompt-history
 
-**Development only - not a release.** A Pi extension that records the prompts you type to a local JSONL file and recalls recent ones from the current directory with `/history`. Search across directories, a shortcut, pause, and deletion are not built yet; they arrive with [#4](https://github.com/khiet/pi-prompt-history/issues/4), [#5](https://github.com/khiet/pi-prompt-history/issues/5), [#6](https://github.com/khiet/pi-prompt-history/issues/6), and [#8](https://github.com/khiet/pi-prompt-history/issues/8). [The PRD](https://github.com/khiet/pi-prompt-history/issues/1) is the full contract. The package is `private` and must not be published.
+**Development only - not a release.** A Pi extension that records the prompts you type to a local JSONL file and searches them with `/history`. A shortcut, pause, and deletion are not built yet; they arrive with [#5](https://github.com/khiet/pi-prompt-history/issues/5), [#6](https://github.com/khiet/pi-prompt-history/issues/6), and [#8](https://github.com/khiet/pi-prompt-history/issues/8). [The PRD](https://github.com/khiet/pi-prompt-history/issues/1) is the full contract. The package is `private` and must not be published.
 
 ## Usage
 
-Type `/history` in Pi's interactive TUI. A picker opens with an empty query, listing the newest 100 prompts recorded in the current directory (the exact cwd string), newest first.
+Type `/history` in Pi's interactive TUI. A picker opens with an empty query, listing prompts recorded in the current directory (the exact cwd string, not the Git root), newest first. Every opening starts this way; neither the draft nor the last query carries over.
 
-- Up/Down selects. Typing filters to prompts containing the query, ignoring case.
+- Typing searches every recorded prompt for the query as a literal substring, after lowercasing both with JavaScript's `toLowerCase()`. Punctuation has no special meaning. Case folding is simple and locale-independent: `CAFÉ` matches `café`, but `ß` does not match `ss`, and a composed `é` does not match `e` plus a combining accent.
+- At most the newest 100 matches are listed, and the picker says when there are more. Type more of the query to reach older prompts; there is no paging.
+- Tab switches between this directory and all directories, keeping the query. In all directories, each prompt shows the directory it was typed in.
+- Up/Down selects. Below the list, a preview shows the selected prompt's local time and its first lines.
 - Enter puts the selected prompt in the editor without sending it. It **replaces the whole draft**. If the draft contains an image (Pi keeps a pasted or dropped image as a `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, or `.bmp` file path in the text), you are asked to confirm first, because the image is replaced too. The check looks only for such paths in the draft text, so it also asks when you merely typed a name like `logo.png`, and it cannot see an image Pi holds any other way. Images from the recalled prompt were never stored and are not restored.
 - Escape closes the picker and leaves the draft, including any image, unchanged.
 
-Restored text is the stored text as Pi's editor normalizes it: tabs become spaces and CR/CRLF become LF. The stored record itself is never changed. The list shows each prompt on one line with terminal control characters drawn as visible symbols; the restored text keeps them.
+Restored text is the stored text as Pi's editor normalizes it: tabs become spaces and CR/CRLF become LF. The stored record itself is never changed. The list shows each prompt on one line and the preview up to eight of its lines, both with terminal control characters drawn as visible symbols; the restored text keeps them.
 
-If nothing has been recorded in this directory, the picker says so. If the history file cannot be read, the picker shows it as unavailable with the file and error code instead of any earlier results, and leaves the file untouched. `/history` does nothing outside the TUI, and only one picker opens at a time.
+The picker distinguishes no prompts recorded in the scope from no prompts matching the query. Each search reads the history file. If it cannot be read, the picker shows it as unavailable with the file and error code instead of any earlier results, and leaves the file untouched. `/history` does nothing outside the TUI, and only one picker opens at a time.
 
 ## Privacy: what loading this extension changes
 

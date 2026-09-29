@@ -5,6 +5,9 @@ import type { StorePaths } from "./config.ts";
 /** Larger prompts are skipped, never truncated, so every stored line stays small. */
 export const MAX_PROMPT_BYTES = 32_768;
 
+/** Most matches one search returns; refining the query reaches older ones. */
+export const MAX_RESULTS = 100;
+
 export type HistoryRecord = {
 	v: 1;
 	id: string;
@@ -17,16 +20,34 @@ export type HistoryRecord = {
 
 export type RecordOutcome = "recorded" | "too-large" | "closed";
 
+export type SearchRequest = {
+	/** Literal text; an empty query matches every record in scope. */
+	query: string;
+	/** Exact cwd string to search; omitted searches every directory. */
+	cwd?: string | undefined;
+};
+
+export type SearchResult = {
+	/** At most MAX_RESULTS matches, newest first with `id` breaking ties. */
+	records: HistoryRecord[];
+	/** More records matched than were returned. */
+	capped: boolean;
+};
+
 export type History = {
 	/** Appends one line. Rejects on I/O failure; the caller decides how to report it. */
 	record(
 		entry: Pick<HistoryRecord, "text" | "cwd" | "session">,
 	): Promise<RecordOutcome>;
 	/**
-	 * Records for one cwd string, newest first with `id` breaking ties. Rejects
-	 * when the file exists but cannot be read; never recreates or rewrites it.
+	 * Matches `query` against every stored record in scope. Matching is a
+	 * literal substring test after `toLowerCase()` on both sides: simple case
+	 * mappings apply in any script, but there is no locale-aware or full case
+	 * folding ("ß" never matches "ss") and no Unicode normalization (composed
+	 * and decomposed accents differ). Rejects when the file exists but cannot
+	 * be read; never recreates or rewrites it.
 	 */
-	search(scope: { cwd: string }): Promise<HistoryRecord[]>;
+	search(request: SearchRequest): Promise<SearchResult>;
 	/** Waits for pending appends; later records are refused. Safe to call twice. */
 	close(): Promise<void>;
 };
@@ -67,20 +88,31 @@ export function openHistory(paths: StorePaths): History {
 			return "recorded";
 		},
 
-		async search({ cwd }) {
+		async search({ query, cwd }) {
 			await pending;
 			let content: string;
 			try {
 				content = await readFile(paths.historyFile, "utf8");
 			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+				if ((error as NodeJS.ErrnoException).code === "ENOENT")
+					return { records: [], capped: false };
 				throw error;
 			}
-			return content
+			const needle = query.toLowerCase();
+			const matches = content
 				.split("\n")
 				.map(parseRecord)
-				.filter((record): record is HistoryRecord => record?.cwd === cwd)
+				.filter(
+					(record): record is HistoryRecord =>
+						record !== undefined &&
+						(cwd === undefined || record.cwd === cwd) &&
+						record.text.toLowerCase().includes(needle),
+				)
 				.sort(newestFirst);
+			return {
+				records: matches.slice(0, MAX_RESULTS),
+				capped: matches.length > MAX_RESULTS,
+			};
 		},
 
 		async close() {

@@ -137,7 +137,7 @@ describe("/history picker", () => {
 		const { picker, running } = await openHistory();
 
 		picker.press(..."diff");
-		assert.ok(!screen(picker.render()).includes("write tests"));
+		await picker.until((shown) => !shown.includes("write tests"));
 		picker.press(keys.enter);
 		await running;
 
@@ -149,7 +149,7 @@ describe("/history picker", () => {
 		const { picker, running } = await openHistory();
 
 		picker.press(..."zzz");
-		assert.match(screen(picker.render()), /no prompts match/i);
+		await picker.until((shown) => /no prompts match/i.test(shown));
 		picker.press(keys.enter, keys.escape);
 		await running;
 
@@ -244,12 +244,13 @@ describe("picker states and display", () => {
 		await seed([{ text: stored, ts: 1 }]);
 		const { picker, running } = await openHistory();
 
-		// The query field draws its own cursor with escapes, so check the entry.
-		const entry = picker.render().find((line) => line.includes("red"));
-		assert.ok(entry);
+		// The query field draws its own cursor with escapes, so check the list
+		// row and the preview.
+		const shown = picker.render().filter((line) => line.includes("red"));
+		assert.equal(shown.length, 2, shown.join("\n"));
 		const isControl = (char: string) =>
 			char < " " || (char >= "\x7f" && char <= "\x9f");
-		assert.ok(![...entry].some(isControl), entry);
+		for (const line of shown) assert.ok(![...line].some(isControl), line);
 		picker.press(keys.enter);
 		await running;
 
@@ -323,5 +324,329 @@ describe("/history lifecycle guards", () => {
 		await running;
 
 		assert.deepEqual(host.ui.editorWrites, ["just typed"]);
+	});
+});
+
+describe("searching history", () => {
+	test("finds a match older than the first 100 prompts", async () => {
+		await seed([
+			{ text: "the old needle", ts: 0 },
+			...Array.from({ length: 150 }, (_, i) => ({
+				text: `recent ${i}`,
+				ts: i + 1,
+			})),
+		]);
+		const { picker, running } = await openHistory();
+		assert.ok(!screen(picker.render()).includes("old needle"));
+
+		picker.press(..."NEEDLE", keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, ["the old needle"]);
+	});
+
+	test("says when matches are capped and stops saying so once refined", async () => {
+		await seed(
+			Array.from({ length: 101 }, (_, i) => ({
+				text: i === 0 ? "oldest prompt" : `prompt ${i}`,
+				ts: i,
+			})),
+		);
+		const { picker, running } = await openHistory();
+		assert.match(screen(picker.render()), /newest 100/i);
+
+		picker.press(..."oldest");
+		const refined = await picker.until((shown) => !/newest 100/i.test(shown));
+		assert.ok(refined.includes("oldest prompt"));
+		picker.press(keys.escape);
+		await running;
+	});
+
+	test("matches punctuation literally", async () => {
+		await seed([
+			{ text: "run a.*b please", ts: 1 },
+			{ text: "run axxb please", ts: 2 },
+		]);
+		const { picker, running } = await openHistory();
+
+		picker.press(..."a.*b");
+		await picker.until((shown) => !shown.includes("axxb"));
+		picker.press(keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, ["run a.*b please"]);
+	});
+
+	test("matches Unicode case-insensitively", async () => {
+		await seed([
+			{ text: "CAFÉ 日本語", ts: 1 },
+			{ text: "plain", ts: 2 },
+		]);
+		const { picker, running } = await openHistory();
+
+		picker.press(..."café 日本");
+		await picker.until((shown) => !shown.includes("plain"));
+		picker.press(keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, ["CAFÉ 日本語"]);
+	});
+
+	test("Tab switches between this directory and all directories", async () => {
+		await seed([
+			{ text: "prompt here", ts: 1 },
+			{ text: "prompt elsewhere", ts: 2, cwd: "/work/other" },
+		]);
+		const { picker, running } = await openHistory();
+		assert.match(screen(picker.render()), /this directory/i);
+
+		picker.press(keys.tab);
+		const all = await picker.until((shown) =>
+			shown.includes("prompt elsewhere"),
+		);
+		assert.match(all, /all directories/i);
+		assert.ok(all.includes("/work/other"), all);
+		assert.ok(all.includes("/work/project"), all);
+
+		picker.press(keys.tab);
+		const back = await picker.until(
+			(shown) => !shown.includes("prompt elsewhere"),
+		);
+		assert.ok(!back.includes("/work/project"), back);
+		picker.press(keys.escape);
+		await running;
+	});
+
+	test("keeps the query when switching scope", async () => {
+		await seed([
+			{ text: "deploy here", ts: 1 },
+			{ text: "deploy elsewhere", ts: 2, cwd: "/work/other" },
+			{ text: "unrelated elsewhere", ts: 3, cwd: "/work/other" },
+		]);
+		const { picker, running } = await openHistory();
+
+		picker.press(..."deploy", keys.tab);
+		const shown = await picker.until((s) => s.includes("deploy elsewhere"));
+		assert.ok(!shown.includes("unrelated"));
+		picker.press(keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, ["deploy elsewhere"]);
+	});
+
+	test("the footer shows the scope-toggle control", async () => {
+		await seed([{ text: "old prompt", ts: 1 }]);
+		const { picker, running } = await openHistory();
+
+		assert.match(screen(picker.render()).split("\n").at(-1) ?? "", /tab/i);
+		picker.press(keys.escape);
+		await running;
+	});
+
+	test("every opening starts with an empty query in this directory", async () => {
+		await seed([
+			{ text: "prompt here", ts: 1 },
+			{ text: "prompt elsewhere", ts: 2, cwd: "/work/other" },
+		]);
+		host.ui.draft = "elsewhere";
+		const first = await openHistory();
+		assert.ok(screen(first.picker.render()).includes("prompt here"));
+		first.picker.press(..."else", keys.tab);
+		await first.picker.until((shown) => shown.includes("prompt elsewhere"));
+		first.picker.press(keys.escape);
+		await first.running;
+
+		const { picker, running } = await openHistory();
+		const shown = screen(picker.render());
+		assert.match(shown, /this directory/i);
+		assert.ok(shown.includes("prompt here"), shown);
+		assert.ok(!shown.includes("prompt elsewhere"), shown);
+		picker.press(keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, ["prompt here"]);
+	});
+
+	test("scopes by the exact cwd string", async () => {
+		await seed([
+			{ text: "in subdirectory", ts: 1, cwd: "/work/project/sub" },
+			{ text: "with trailing slash", ts: 2, cwd: "/work/project/" },
+		]);
+		const { picker, running } = await openHistory();
+
+		assert.match(screen(picker.render()), /no prompts .*this directory/i);
+		picker.press(keys.escape);
+		await running;
+	});
+
+	test("says no prompts are recorded anywhere when all history is empty", async () => {
+		const { picker, running } = await openHistory();
+
+		picker.press(keys.tab);
+		const shown = await picker.until((s) => /all directories/i.test(s));
+		assert.match(shown, /no prompts recorded yet/i);
+		assert.doesNotMatch(shown, /no prompts match/i);
+		picker.press(keys.escape);
+		await running;
+	});
+
+	test("shows unavailable rather than earlier results when a search fails", {
+		skip: skipPermissionTests,
+	}, async () => {
+		await seed([{ text: "secret prompt", ts: 1 }]);
+		const { picker, running } = await openHistory();
+
+		await chmod(store.historyFile, 0o000);
+		picker.press("s");
+		const shown = await picker.until((s) => /unavailable/i.test(s), 200);
+		assert.ok(!shown.includes("secret prompt"), shown);
+		picker.press(keys.enter, keys.escape);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, []);
+	});
+});
+
+describe("selection", () => {
+	test("Up and Down move the selection that Enter restores", async () => {
+		await seed([
+			{ text: "first", ts: 3 },
+			{ text: "second", ts: 2 },
+			{ text: "third", ts: 1 },
+		]);
+		const { picker, running } = await openHistory();
+
+		picker.press(keys.down, keys.down, keys.up, keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, ["second"]);
+	});
+
+	test("filtering moves the selection to the newest match", async () => {
+		await seed([
+			{ text: "alpha one", ts: 3 },
+			{ text: "beta", ts: 2 },
+			{ text: "alpha two", ts: 1 },
+		]);
+		const { picker, running } = await openHistory();
+
+		// Select "beta", then filter it out.
+		picker.press(keys.down, ..."alpha");
+		await picker.until((shown) => !shown.includes("beta"));
+		picker.press(keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, ["alpha one"]);
+	});
+
+	test("switching scope moves the selection into the new results", async () => {
+		await seed([
+			{ text: "here newer", ts: 3 },
+			{ text: "here older", ts: 1 },
+			{ text: "elsewhere", ts: 2, cwd: "/work/other" },
+		]);
+		const { picker, running } = await openHistory();
+
+		picker.press(keys.down, keys.tab);
+		await picker.until((shown) => shown.includes("elsewhere"));
+		picker.press(keys.down, keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, ["elsewhere"]);
+	});
+
+	test("Enter pressed while a search is running restores its newest match", async () => {
+		await seed([
+			{ text: "newest", ts: 2 },
+			{ text: "wanted", ts: 1 },
+		]);
+		const { picker, running } = await openHistory();
+
+		picker.press(..."want", keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, ["wanted"]);
+	});
+});
+
+describe("previews and metadata", () => {
+	const utc = (iso: string) => Date.parse(`${iso}Z`);
+	let previousTz: string | undefined;
+	beforeEach(() => {
+		previousTz = process.env.TZ;
+		process.env.TZ = "UTC";
+	});
+	afterEach(() => {
+		if (previousTz === undefined) delete process.env.TZ;
+		else process.env.TZ = previousTz;
+	});
+
+	test("previews every line of the selected multiline prompt", async () => {
+		await seed([
+			{ text: "one line", ts: 2 },
+			{ text: "Refactor:\n- step one\n\tstep two", ts: 1 },
+		]);
+		const { picker, running } = await openHistory();
+		// The list row flattens the prompt; only the preview splits it.
+		assert.ok(!picker.render().some((line) => line.trim() === "- step one"));
+
+		picker.press(keys.down);
+		const lines = picker.render();
+		for (const expected of ["Refactor:", "- step one", "step two"])
+			assert.ok(
+				lines.some((line) => line.trim() === expected),
+				lines.join("\n"),
+			);
+		picker.press(keys.escape);
+		await running;
+	});
+
+	test("bounds a long preview and says how much is hidden", async () => {
+		const text = Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n");
+		await seed([{ text, ts: 1 }]);
+		const { picker, running } = await openHistory();
+
+		const shown = picker.render();
+		assert.ok(shown.length < 30, shown.join("\n"));
+		assert.match(shown.join("\n"), /more lines/i);
+		picker.press(keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, [text]);
+	});
+
+	test("shows local timestamps and hides record and session ids", async () => {
+		await seed([
+			{ text: "old prompt", ts: utc("2026-03-04T05:06:07"), id: "rec-7f3a" },
+		]);
+		const { picker, running } = await openHistory();
+
+		const shown = screen(picker.render());
+		assert.ok(shown.includes("2026-03-04 05:06"), shown);
+		assert.ok(!shown.includes("rec-7f3a"));
+		assert.ok(!shown.includes("earlier"), "session id");
+		picker.press(keys.escape);
+		await running;
+	});
+
+	test("keeps all-directory rows and previews within narrow widths", async () => {
+		await seed([
+			{
+				text: "a long prompt that will not fit\n日本語のとても長いプロンプト👋👋",
+				ts: 1,
+				cwd: "/a/very/long/working/directory/path",
+			},
+			{ text: "x", ts: 2 },
+		]);
+		const { picker, running } = await openHistory();
+		picker.press(keys.tab);
+		await picker.until((shown) => shown.includes("/a/very"), 200);
+		picker.press(keys.down);
+
+		for (const width of [120, 41, 40, 24, 10, 3, 1])
+			for (const line of picker.render(width))
+				assert.ok(visibleWidth(line) <= width, `${width}: ${line}`);
+		picker.press(keys.escape);
+		await running;
 	});
 });
