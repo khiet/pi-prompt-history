@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, stat, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { visibleWidth } from "@earendil-works/pi-tui";
@@ -504,6 +504,70 @@ describe("searching history", () => {
 		await running;
 
 		assert.deepEqual(host.ui.editorWrites, []);
+	});
+});
+
+describe("history shared with other writers", () => {
+	test("recovers once the file is readable again", {
+		skip: skipPermissionTests,
+	}, async () => {
+		await seed([{ text: "kept prompt", ts: 1 }]);
+		const loaded = await openHistory();
+		loaded.picker.press(keys.escape);
+		await loaded.running;
+		await chmod(store.historyFile, 0o000);
+		const first = await openHistory();
+		assert.match(screen(first.picker.render(200)), /unavailable/i);
+		first.picker.press(keys.escape);
+		await first.running;
+
+		await chmod(store.historyFile, 0o600);
+		const { picker, running } = await openHistory();
+		assert.ok(screen(picker.render()).includes("kept prompt"));
+		picker.press(keys.escape);
+		await running;
+	});
+
+	test("shows prompts another process appended while the picker is open", async () => {
+		await seed([{ text: "first prompt", ts: 1 }]);
+		const { picker, running } = await openHistory();
+		await appendFile(
+			store.historyFile,
+			`${JSON.stringify({ v: 1, id: "x", text: "appended elsewhere", cwd: "/work/project", session: "other", ts: 2 })}\n`,
+		);
+		picker.press("p");
+		await picker.until((shown) => shown.includes("appended elsewhere"));
+		picker.press(keys.escape);
+		await running;
+	});
+
+	test("warns once per session about unreadable lines, without their content", async () => {
+		await seed([{ text: "good prompt", ts: 1 }]);
+		await appendFile(store.historyFile, "secret torn line\n[]\n");
+
+		const first = await openHistory();
+		assert.ok(screen(first.picker.render()).includes("good prompt"));
+		first.picker.press("g");
+		await first.picker.until((shown) => shown.includes("good prompt"));
+		first.picker.press(keys.escape);
+		await first.running;
+		const second = await openHistory();
+		second.picker.press(keys.escape);
+		await second.running;
+
+		assert.equal(host.notices.length, 1);
+		const { message, type } = host.notices[0] ?? {};
+		assert.equal(type, "warning");
+		assert.match(message ?? "", /skipped 2 unreadable lines/i);
+		assert.ok(message?.includes(store.historyFile));
+		assert.ok(!message?.includes("secret"));
+
+		await host.shutdown();
+		host = loadExtension();
+		const later = await openHistory();
+		later.picker.press(keys.escape);
+		await later.running;
+		assert.equal(host.notices.length, 1, "a new session warns again");
 	});
 });
 

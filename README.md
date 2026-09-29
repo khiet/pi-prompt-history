@@ -15,7 +15,7 @@ Press Ctrl+R (or your [configured shortcut](#shortcut)) or type `/history` in Pi
 
 Restored text is the stored text as Pi's editor normalizes it: tabs become spaces and CR/CRLF become LF. The stored record itself is never changed. The list shows each prompt on one line and the preview up to eight of its lines, both with terminal control characters drawn as visible symbols; the restored text keeps them.
 
-The picker distinguishes no prompts recorded in the scope from no prompts matching the query. Each search reads the history file. If it cannot be read, the picker shows it as unavailable with the file and error code instead of any earlier results, and leaves the file untouched. The shortcut and `/history` do nothing outside the TUI, and only one picker opens at a time.
+The picker distinguishes no prompts recorded in the scope from no prompts matching the query. Before each search the extension checks whether the history file changed (size, modification time, inode, or status change) and rereads it if so, so prompts recorded by other Pi processes appear on the next keystroke. If it cannot be read, the picker shows it as unavailable with the file and error code instead of any earlier results, and leaves the file untouched. The shortcut and `/history` do nothing outside the TUI, and only one picker opens at a time.
 
 ## Pause
 
@@ -99,7 +99,23 @@ One JSON object per line, appended with one write per record:
 {"v":1,"id":"<uuid>","text":"explain this diff","cwd":"/work/project","session":"<session id>","ts":1790000000000}
 ```
 
-`ts` is epoch milliseconds and `session` is Pi's session ID. Readers ignore unknown fields and skip lines they cannot parse. Reading never rewrites the file.
+`ts` is epoch milliseconds and `session` is Pi's session ID. Readers ignore unknown fields and skip lines they cannot parse, such as a line torn by an interrupted write; the first search that meets them warns once per session with their count, never their content. Reading never rewrites the file.
+
+## Limits
+
+These are fixed, not configurable:
+
+- **Retention:** the newest 10,000 records, by the search order (newest `ts` first, then `id`). Appends stay cheap: each Pi process counts the records it last loaded plus its own appends, and only when an append takes that count past 11,000 does it rewrite the file down to the newest 10,000. Other processes' appends join the count when this process next searches, so with several writers the file can briefly grow past 11,000. Unreadable lines are dropped by that rewrite.
+- **Results:** at most the newest 100 matches per search, over every retained record.
+- **Prompt size:** 32,768 UTF-8 bytes; larger prompts are skipped.
+
+A rewrite writes a private (`0600`) temporary file in the same directory and renames it over the history file. If preparing it fails, the temporary file is removed, the original stays as it was, and a warning names the file, its directory, and the error code; the next append past the threshold tries again. An unreadable history file is never rewritten.
+
+## Several Pi processes
+
+Every Pi process with this extension appends to the same file. Each record is one write in append mode, which keeps lines whole on a local filesystem; network filesystems are not supported and may interleave or lose lines. Repeated prompts from different processes are all kept.
+
+There is no locking. The one known loss is a rewrite: another process's append that lands between the rewrite reading the file and renaming over it, or that opened the old file before the rename, is lost. This happens only around the rare compaction rewrite and is accepted for the MVP; rewrites are not lossless under concurrency.
 
 ## Failures
 
@@ -129,7 +145,7 @@ Layout:
 - `src/history.ts`: the JSONL store. File I/O only; knows nothing about Pi.
 - `src/picker.ts`: the search picker, composed from Pi's `Input` and `SelectList`. No file I/O.
 - `src/config.ts`: store and config paths from `getAgentDir()`, and the validated shortcut setting.
-- `test/`: behavior tests. `harness.ts` is a minimal host that records registered handlers and fires events at them; it is not a Pi runtime.
+- `test/`: behavior tests. `concurrency.test.ts` runs the store in several Node processes at once. `harness.ts` is a minimal host that records registered handlers and fires events at them; it is not a Pi runtime.
 - `spike/` and `docs/research/`: the compatibility spike (`npm run spike`) and research that shaped the design. `spike/shortcut.py` drives the real extension in real Pi to check the shortcut, its config, reload, and `/history`. `spike/pause.py` does the same for pause, with `spike/driver.ts` swallowing prompts so no model is called.
 
 The extension registers handlers and reads `config.json` once to register the shortcut; it opens the history file only at the first eligible prompt or search. Each Pi session runtime (startup, `/reload`, `/new`, `/resume`, `/fork`) gets a fresh extension instance, and `session_shutdown` stops capture, waits for pending writes, and closes the store, so a replaced runtime never records, and a picker still open when its session shuts down restores nothing. The pause flag is the one thing kept across runtimes: it lives on `globalThis` under `Symbol.for("pi-prompt-history/process-state")`, because Pi documents no process-lifetime state. This relies on Pi reusing one Node realm for every runtime in a process, which Pi does not promise, so `spike/pause.py` must pass on every supported Pi release.
@@ -162,5 +178,5 @@ Not verified, and required before any release:
 - Real attachments: clipboard and drag-and-drop images alongside text, and the image warning before `/history` replaces such a draft.
 - The search shortcut in terminals other than the PTY check above: other terminal emulators, `super` and `ctrl+shift` keys (which need the Kitty keyboard protocol), tmux/screen, and reserved actions other than `app.clear`.
 - The picker in the real TUI: restoration and editor normalization, cancellation, IME composition, themes, resizing, and narrow terminals.
-- Concurrent appends from several Pi processes (owned by [#7](https://github.com/khiet/pi-prompt-history/issues/7)).
+- Concurrent appends from several real Pi processes. `test/concurrency.test.ts` covers several Node processes sharing the store, not several Pi instances.
 - Any Pi release other than 0.85.1 and 0.87.1, and any other Node version or platform.

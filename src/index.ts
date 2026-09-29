@@ -1,10 +1,17 @@
+import { dirname } from "node:path";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
 	InputEvent,
 } from "@earendil-works/pi-coding-agent";
 import { loadConfig, resolveStorePaths } from "./config.ts";
-import { type History, MAX_PROMPT_BYTES, openHistory } from "./history.ts";
+import {
+	CompactionError,
+	type History,
+	MAX_PROMPT_BYTES,
+	MAX_RECORDS,
+	openHistory,
+} from "./history.ts";
 import { createPicker, type PickerSearch } from "./picker.ts";
 
 const WARNING_INTERVAL_MS = 60_000;
@@ -13,6 +20,7 @@ const WARNING_INTERVAL_MS = 60_000;
 type WarningKind =
 	| "too-large"
 	| "write-failed"
+	| "trim-failed"
 	| "capture-failed"
 	| "config-ignored";
 
@@ -55,6 +63,7 @@ export default function promptHistory(pi: ExtensionAPI): void {
 	// the context that is still live, and nothing touches it afterwards.
 	const inFlight = new Set<Promise<void>>();
 	const lastWarning = new Map<WarningKind, number>();
+	let warnedMalformed = false;
 	const state = processState();
 
 	// Warnings name the problem and the fix, never the prompt text.
@@ -68,6 +77,14 @@ export default function promptHistory(pi: ExtensionAPI): void {
 		} catch {
 			// Reporting is best effort too; a capture must never reject.
 		}
+	};
+
+	// Best effort, like warnings: failing to show feedback never undoes a state
+	// change that already took effect or fails a search.
+	const tryUI = (show: () => void) => {
+		try {
+			show();
+		} catch {}
 	};
 
 	const openStore = () => {
@@ -96,11 +113,17 @@ export default function promptHistory(pi: ExtensionAPI): void {
 						);
 				},
 				(error: unknown) =>
-					warn(
-						ctx,
-						"write-failed",
-						`Prompt history could not save to ${historyFile} (${errorCode(error)}). Check that the file and its directory are writable. Prompting is unaffected.`,
-					),
+					error instanceof CompactionError
+						? warn(
+								ctx,
+								"trim-failed",
+								`Prompt history saved the prompt but could not trim ${historyFile} to the newest ${MAX_RECORDS} (${errorCode(error)}). Check that the file is readable and ${dirname(historyFile)} is writable; the file was not changed. Prompting is unaffected.`,
+							)
+						: warn(
+								ctx,
+								"write-failed",
+								`Prompt history could not save to ${historyFile} (${errorCode(error)}). Check that the file and its directory are writable. Prompting is unaffected.`,
+							),
 			);
 		inFlight.add(settled);
 		void settled.finally(() => inFlight.delete(settled));
@@ -121,25 +144,39 @@ export default function promptHistory(pi: ExtensionAPI): void {
 		return { action: "continue" };
 	});
 
-	// Reads the file on every search, so the picker never shows cached records.
-	const search: PickerSearch = async ({ query, cwd }) => {
-		let historyFile = "prompt history";
-		try {
-			const opened = openStore();
-			historyFile = opened.historyFile;
-			return {
-				kind: "records",
-				...(await opened.history.search({ query, cwd })),
-			};
-		} catch (error) {
-			return {
-				kind: "unavailable",
-				guidance: `Could not read ${historyFile} (${errorCode(error)}). Check that the file is readable, then run /history again. It has not been changed.`,
-			};
-		}
-	};
+	// The store rereads a changed file before every search and rejects rather
+	// than answering from cache, so the picker never shows stale records.
+	const searchFor =
+		(ctx: ExtensionContext): PickerSearch =>
+		async ({ query, cwd }) => {
+			let historyFile = "prompt history";
+			try {
+				const opened = openStore();
+				historyFile = opened.historyFile;
+				const { records, capped, malformed } = await opened.history.search({
+					query,
+					cwd,
+				});
+				if (malformed > 0 && !warnedMalformed && live) {
+					warnedMalformed = true;
+					tryUI(() =>
+						ctx.ui.notify(
+							`Prompt history skipped ${malformed} unreadable lines in ${historyFile}; the other prompts are still searchable. Reading leaves the file unchanged.`,
+							"warning",
+						),
+					);
+				}
+				return { kind: "records", records, capped };
+			} catch (error) {
+				return {
+					kind: "unavailable",
+					guidance: `Could not read ${historyFile} (${errorCode(error)}). Check that the file is readable, then run /history again. It has not been changed.`,
+				};
+			}
+		};
 
 	const recall = async (ctx: ExtensionContext) => {
+		const search = searchFor(ctx);
 		const initial = await search({ query: "", cwd: ctx.cwd });
 		if (!live) return;
 		const text = await ctx.ui.custom<string | undefined>(
@@ -175,14 +212,6 @@ export default function promptHistory(pi: ExtensionAPI): void {
 		} finally {
 			pickerOpen = false;
 		}
-	};
-
-	// Best effort, like warnings: failing to show feedback never undoes a state
-	// change that already took effect.
-	const tryUI = (show: () => void) => {
-		try {
-			show();
-		} catch {}
 	};
 
 	// Every new runtime restores the indicator, so a pause is never out of sight.
