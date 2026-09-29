@@ -5,7 +5,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { resolveStorePaths } from "./config.ts";
 import { type History, MAX_PROMPT_BYTES, openHistory } from "./history.ts";
-import { createPicker, type PickerContent } from "./picker.ts";
+import { createPicker, type PickerSearch } from "./picker.ts";
 
 const WARNING_INTERVAL_MS = 60_000;
 
@@ -96,13 +96,16 @@ export default function promptHistory(pi: ExtensionAPI): void {
 		return { action: "continue" };
 	});
 
-	// Loads fresh on every opening, so the picker never shows cached records.
-	const load = async (cwd: string): Promise<PickerContent> => {
+	// Reads the file on every search, so the picker never shows cached records.
+	const search: PickerSearch = async ({ query, cwd }) => {
 		let historyFile = "prompt history";
 		try {
 			const opened = openStore();
 			historyFile = opened.historyFile;
-			return { kind: "records", records: await opened.history.search({ cwd }) };
+			return {
+				kind: "records",
+				...(await opened.history.search({ query, cwd })),
+			};
 		} catch (error) {
 			return {
 				kind: "unavailable",
@@ -112,12 +115,14 @@ export default function promptHistory(pi: ExtensionAPI): void {
 	};
 
 	const recall = async (ctx: ExtensionContext) => {
-		const content = await load(ctx.cwd);
+		const initial = await search({ query: "", cwd: ctx.cwd });
 		if (!live) return;
 		const text = await ctx.ui.custom<string | undefined>(
 			(tui, theme, keybindings, done) =>
 				createPicker({
-					content,
+					cwd: ctx.cwd,
+					initial,
+					search,
 					theme,
 					keybindings,
 					requestRender: () => tui.requestRender(),
@@ -138,7 +143,7 @@ export default function promptHistory(pi: ExtensionAPI): void {
 	};
 
 	pi.registerCommand("history", {
-		description: "Recall a recent prompt from this directory into the editor",
+		description: "Search recorded prompts and restore one into the editor",
 		handler: async (_args, ctx) => {
 			if (!live || ctx.mode !== "tui" || pickerOpen) return;
 			pickerOpen = true;

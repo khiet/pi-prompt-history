@@ -23,6 +23,11 @@ export type Notice = { message: string; type: string | undefined };
 export type Picker = {
 	render(width?: number): string[];
 	press(...keys: string[]): void;
+	/**
+	 * Resolves once the rendered screen satisfies `ready`, re-checking on each
+	 * render the picker requests; searches settle asynchronously.
+	 */
+	until(ready: (screen: string) => boolean, width?: number): Promise<string>;
 };
 
 /** Raw terminal key sequences for driving a picker. */
@@ -31,6 +36,7 @@ export const keys = {
 	down: "\x1b[B",
 	enter: "\r",
 	escape: "\x1b",
+	tab: "\t",
 };
 
 export type ContextOptions = {
@@ -118,8 +124,13 @@ export function loadExtension(): Host {
 		const result = new Promise<T>((resolve) => {
 			done = resolve;
 		});
+		const renderWaiters = new Set<() => void>();
 		const component = await factory(
-			{ requestRender: () => {} },
+			{
+				requestRender: () => {
+					for (const waiter of renderWaiters) waiter();
+				},
+			},
 			theme,
 			getKeybindings(),
 			done,
@@ -130,6 +141,29 @@ export function loadExtension(): Host {
 			press: (...data) => {
 				for (const key of data) component.handleInput?.(key);
 			},
+			until: (ready, width = 80) =>
+				new Promise((resolve, reject) => {
+					const check = () => {
+						const screen = component.render(width).join("\n");
+						if (!ready(screen)) return false;
+						cleanup();
+						resolve(screen);
+						return true;
+					};
+					const timer = setTimeout(() => {
+						cleanup();
+						reject(
+							new Error(
+								`screen never matched:\n${component.render(width).join("\n")}`,
+							),
+						);
+					}, 2000);
+					const cleanup = () => {
+						clearTimeout(timer);
+						renderWaiters.delete(check);
+					};
+					if (!check()) renderWaiters.add(check);
+				}),
 		};
 		ui.pickers.push(picker);
 		for (const waiter of pickerWaiters.splice(0)) waiter(picker);
