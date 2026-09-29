@@ -135,7 +135,7 @@ Only `@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui` are imported
 | Node | 22.22.0 |
 | Platform | macOS arm64 |
 
-On both Pi versions, typecheck and `npm test` pass, and Pi's own extension loader loads the package from its manifest with no errors and no storage I/O. The `*` peer range is packaging convention, not a claim of wider support.
+On both Pi versions, typecheck and `npm test` pass, and Pi's own extension loader loads the package from its manifest with no errors and no history-file I/O; loading reads only `config.json`. The `*` peer range is packaging convention, not a claim of wider support.
 
 On both Pi versions, `python3 spike/shortcut.py` passes in a real TUI (PTY, `TERM=xterm-256color`): Ctrl+R opens the picker instead of rename, with Pi's conflict warning; a configured Alt+H opens it and Ctrl+R then does not; an invalid config warns and falls back to Ctrl+R; with `app.clear` bound to Ctrl+R, Pi skips the shortcut and `/history` still opens; and after editing the config, the old key keeps working until `/reload`, then only the new key does.
 

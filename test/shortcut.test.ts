@@ -34,10 +34,10 @@ const writeConfig = async (content: string) => {
 const shortcutsOf = (host: Host) =>
 	host.registrations.filter((entry) => entry.startsWith("registerShortcut:"));
 
-/** Presses the shortcut and closes the picker it opens without choosing. */
-const openWith = async (host: Host, key: string) => {
+/** Runs a trigger and closes the picker it opens without choosing. */
+const openWith = async (host: Host, trigger: () => Promise<void>) => {
 	const opened = host.nextPicker();
-	const running = host.shortcut(key);
+	const running = trigger();
 	const picker = await opened;
 	picker.press(keys.escape);
 	await running;
@@ -48,7 +48,7 @@ describe("search shortcut", () => {
 		const host = await start();
 
 		assert.deepEqual(shortcutsOf(host), ["registerShortcut:ctrl+r"]);
-		await openWith(host, "ctrl+r");
+		await openWith(host, () => host.shortcut("ctrl+r"));
 		assert.equal(host.ui.pickers.length, 1);
 		assert.deepEqual(host.notices, []);
 	});
@@ -58,7 +58,7 @@ describe("search shortcut", () => {
 		const host = await start();
 
 		assert.deepEqual(shortcutsOf(host), ["registerShortcut:alt+h"]);
-		await openWith(host, "alt+h");
+		await openWith(host, () => host.shortcut("alt+h"));
 		assert.equal(host.ui.pickers.length, 1);
 		assert.deepEqual(host.notices, []);
 	});
@@ -137,6 +137,25 @@ describe("invalid settings", () => {
 			assert.match(notice?.message ?? "", /\/history/);
 		});
 	}
+
+	test("stays quiet outside the TUI", async () => {
+		await writeConfig('{"shortcut": 7}');
+		const host = loadExtension();
+		hosts.push(host);
+		await host.fire(
+			"session_start",
+			{ reason: "startup" },
+			host.context({ mode: "rpc" }),
+		);
+		assert.deepEqual(host.notices, []);
+	});
+
+	test("the warning never quotes the file's contents", async () => {
+		await writeConfig('{"shortcut": "sk-secret", "sk-secret-key": 1}');
+		const host = await start();
+		assert.equal(host.notices.length, 1);
+		assert.ok(!host.notices[0]?.message.includes("sk-secret"));
+	});
 });
 
 describe("unavailable configuration", () => {
@@ -160,15 +179,8 @@ describe("unavailable configuration", () => {
 		);
 
 		const next = await start();
-		const opened = next.nextPicker();
-		const running = next.command("history");
-		(await opened).press(keys.escape);
-		await running;
-		assert.ok(
-			[...host.notices, ...next.notices].every(
-				({ message }) => !message.includes("private prompt"),
-			),
-		);
+		await openWith(next, () => next.command("history"));
+		assert.equal(next.ui.pickers.length, 1);
 	});
 });
 
@@ -184,7 +196,7 @@ describe("reload", () => {
 		const after = await start();
 		assert.deepEqual(shortcutsOf(after), ["registerShortcut:ctrl+shift+h"]);
 
-		// The replaced runtime's shortcut restores nothing.
+		// The replaced runtime's shortcut opens nothing.
 		await before.shortcut("alt+h");
 		assert.equal(before.ui.pickers.length, 0);
 	});

@@ -30,10 +30,10 @@ export type Config = {
  */
 export function loadConfig(): Config {
 	const configFile = join(resolveStorePaths().dir, "config.json");
-	const fallback = (problem: string): Config => ({
+	const fallback = (problem?: string): Config => ({
 		shortcut: DEFAULT_SHORTCUT,
 		configFile,
-		problem,
+		...(problem && { problem }),
 	});
 
 	let raw: string;
@@ -41,7 +41,7 @@ export function loadConfig(): Config {
 		raw = readFileSync(configFile, "utf8");
 	} catch (error) {
 		const code = (error as NodeJS.ErrnoException | undefined)?.code;
-		if (code === "ENOENT") return { shortcut: DEFAULT_SHORTCUT, configFile };
+		if (code === "ENOENT") return fallback();
 		return fallback(`could not be read (${code ?? "unexpected error"})`);
 	}
 
@@ -54,14 +54,13 @@ export function loadConfig(): Config {
 	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
 		return fallback('must be a JSON object like {"shortcut": "alt+h"}');
 
-	const unsupported = Object.keys(parsed).filter((key) => key !== "shortcut");
-	if (unsupported.length > 0)
+	if (Object.keys(parsed).some((key) => key !== "shortcut"))
 		return fallback(
-			`has unsupported settings (${unsupported.map((key) => JSON.stringify(key)).join(", ")}); "shortcut" is the only one`,
+			'has settings other than "shortcut", the only one supported',
 		);
 
 	const { shortcut } = parsed as { shortcut?: unknown };
-	if (shortcut === undefined) return { shortcut: DEFAULT_SHORTCUT, configFile };
+	if (shortcut === undefined) return fallback();
 	if (typeof shortcut !== "string" || !isUsableShortcut(shortcut))
 		return fallback(
 			'has an invalid "shortcut"; use a key in Pi\'s keybindings format with ctrl, alt, or super, like "alt+h", or a function key like "f5"',
@@ -106,9 +105,8 @@ function isUsableShortcut(shortcut: string): boolean {
 	// "+" is itself a key, written last as in "ctrl++".
 	const plusKey = shortcut === "+" || shortcut.endsWith("++");
 	const prefix = plusKey ? shortcut.slice(0, -2) : shortcut;
-	const parts = prefix === "" ? [] : prefix.split("+");
-	const base = plusKey ? "+" : (parts.pop() ?? "");
-	const modifiers = parts;
+	const modifiers = prefix === "" ? [] : prefix.split("+");
+	const base = plusKey ? "+" : (modifiers.pop() ?? "");
 	if (new Set(modifiers).size !== modifiers.length) return false;
 	if (!modifiers.every((modifier) => MODIFIERS.has(modifier))) return false;
 	if (FUNCTION_KEY.test(base)) return true;

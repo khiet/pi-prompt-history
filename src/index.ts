@@ -10,7 +10,11 @@ import { createPicker, type PickerSearch } from "./picker.ts";
 const WARNING_INTERVAL_MS = 60_000;
 
 /** Each kind of problem is rate-limited on its own. */
-type WarningKind = "too-large" | "write-failed" | "capture-failed" | "config";
+type WarningKind =
+	| "too-large"
+	| "write-failed"
+	| "capture-failed"
+	| "config-ignored";
 
 /**
  * Pi keeps a pasted image in the draft as its file path; these are the image
@@ -167,7 +171,10 @@ export default function promptHistory(pi: ExtensionAPI): void {
 
 	if (config.problem) {
 		const message = `Prompt history config ${config.configFile} ${config.problem}. Using ${config.shortcut}; /history still works. Fix the file, then run /reload.`;
-		pi.on("session_start", (_event, ctx) => warn(ctx, "config", message));
+		// The shortcut exists only in the TUI, so other modes are not told.
+		pi.on("session_start", (_event, ctx) => {
+			if (ctx.mode === "tui") warn(ctx, "config-ignored", message);
+		});
 	}
 
 	pi.on("session_shutdown", async () => {
