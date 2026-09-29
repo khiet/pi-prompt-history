@@ -1,7 +1,8 @@
 // Checks the package shape Pi installs: one extension entry point, an explicit
 // file allowlist that is exactly what npm packs, `*` Pi peers that are never
 // bundled, no runtime dependencies or install scripts, a committed lockfile,
-// and one MIT license across the manifest, lockfile, and LICENSE file. Run from the repository root; exits non-zero on any violation.
+// a private manifest, and MIT in the manifest, lockfile, and LICENSE file.
+// Run from the repository root; exits non-zero on any violation.
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -43,10 +44,10 @@ execFileSync("git", ["ls-files", "--error-unmatch", "package-lock.json"], {
 
 // Publication stays a separate decision from open-sourcing.
 assert.equal(manifest.private, true, "package must stay private");
-assert.equal(manifest.license, "MIT");
+assert.equal(manifest.license, "MIT", "manifest license");
 const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
 assert.equal(lock.packages[""].license, manifest.license, "lockfile license");
-assert.match(readFileSync("LICENSE", "utf8"), /^MIT License\n/);
+assert.match(readFileSync("LICENSE", "utf8"), /^MIT License\n/, "LICENSE text");
 
 // npm must pack exactly the allowlist plus the files it always adds.
 assert.ok(Array.isArray(manifest.files) && manifest.files.length > 0);
