@@ -16,6 +16,7 @@ import promptHistory from "../src/index.ts";
 
 type Handler = (event: unknown, ctx: ExtensionContext) => unknown;
 type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
+type ShortcutHandler = (ctx: ExtensionContext) => Promise<void> | void;
 
 export type Notice = { message: string; type: string | undefined };
 
@@ -82,6 +83,8 @@ export type Host = {
 	shutdown(reason?: string): Promise<void>;
 	/** Runs a registered command; settles when its handler does. */
 	command(name: string, args?: string, ctx?: ExtensionContext): Promise<void>;
+	/** Presses a registered shortcut; settles when its handler does. */
+	shortcut(key: string, ctx?: ExtensionContext): Promise<void>;
 	/** Resolves with the next picker the extension opens. */
 	nextPicker(): Promise<Picker>;
 };
@@ -89,6 +92,7 @@ export type Host = {
 export function loadExtension(): Host {
 	const handlers = new Map<string, Handler[]>();
 	const commands = new Map<string, CommandHandler>();
+	const shortcuts = new Map<string, ShortcutHandler>();
 	const registrations: string[] = [];
 	const notices: Notice[] = [];
 	const ui: HostUI = {
@@ -107,6 +111,8 @@ export function loadExtension(): Host {
 				handlers.set(name, [...(handlers.get(name) ?? []), rest[0] as Handler]);
 			if (kind === "registerCommand")
 				commands.set(name, (rest[0] as { handler: CommandHandler }).handler);
+			if (kind === "registerShortcut")
+				shortcuts.set(name, (rest[0] as { handler: ShortcutHandler }).handler);
 		};
 
 	// A plain theme keeps rendered lines free of ANSI styling, so any escape
@@ -249,6 +255,11 @@ export function loadExtension(): Host {
 			const handler = commands.get(name);
 			if (!handler) throw new Error(`no command registered as ${name}`);
 			await handler(args, ctx);
+		},
+		shortcut: async (key, ctx = context()) => {
+			const handler = shortcuts.get(key);
+			if (!handler) throw new Error(`no shortcut registered as ${key}`);
+			await handler(ctx);
 		},
 		nextPicker: () =>
 			new Promise((resolve) => {
