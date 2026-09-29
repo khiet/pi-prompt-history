@@ -183,7 +183,7 @@ describe("history store", () => {
 });
 
 describe("history search", () => {
-	/** Seeds records with explicit ids and timestamps; `ts` doubles as the id. */
+	/** Writes records whose ids derive from `ts`. */
 	const seed = async (
 		records: { text: string; ts: number; cwd?: string }[],
 	) => {

@@ -115,7 +115,6 @@ export default function promptHistory(pi: ExtensionAPI): void {
 	};
 
 	const recall = async (ctx: ExtensionContext) => {
-		// Every opening starts from an empty query scoped to this directory.
 		const initial = await search({ query: "", cwd: ctx.cwd });
 		if (!live) return;
 		const text = await ctx.ui.custom<string | undefined>(
