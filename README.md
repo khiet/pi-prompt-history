@@ -225,7 +225,7 @@ On both Pi releases, with Node 22.22.0:
 - `spike/shortcut.py` passes, including Ctrl+R bound to each of Pi's 18 reserved actions: Pi warns and skips the shortcut, and `/history` still opens. For `app.exit`, `app.suspend`, and `app.editor.external`, Ctrl+R itself was not pressed.
 - `spike/pause.py` and `npm run spike` pass.
 
-After the MIT license change, `npm run lint`, `npm run typecheck`, `npm test`, `npm run check:package`, and `npm run smoke:install` were rerun and pass on both Pi releases with Node 22.22.0; the Node 24.21.0 results above predate it. The documented install was also checked from a fresh clone, with isolated home and agent directories: `pi install` on the checkout, with no `node_modules`, records it in `settings.json` and `pi list` shows it. That check does not load the extension; `smoke:install` covers loading, for the packed package.
+After the MIT license change, `npm run lint`, `npm run typecheck`, `npm test`, `npm run check:package`, and `npm run smoke:install` were rerun and pass on both Pi releases with Node 22.22.0, and CI reran them with Node 24.21.0 (see below). The documented install was also checked from a fresh clone, with isolated home and agent directories: `pi install` on the checkout, with no `node_modules`, records it in `settings.json` and `pi list` shows it. That check does not load the extension; `smoke:install` covers loading, for the packed package.
 
 The automated tests cover capture, search, storage, and lifecycle; Unicode and punctuation matching; the 32,768-byte boundary; retention and compaction; rereading a file other processes changed; the newest-100 cap over all retained records; confirmations; config fallback and reload; and the unavailable state without stale results. They use a [minimal host harness](#development), not a Pi runtime.
 
@@ -233,7 +233,7 @@ The automated tests cover capture, search, storage, and lifecycle; Unicode and p
 
 Not checked, so not claimed:
 
-- `npm run spike` and `spike/acceptance.py` on Ubuntu: they run only locally, on macOS with Node 22.22.0. CI on Ubuntu runs lint, typecheck, `npm test`, `check:package`, and `smoke:install` for each Pi and Node pair; it last passed on 2026-09-29 at commit `bfb52b8`, before the license change.
+- `npm run spike` and `spike/acceptance.py` on Ubuntu: they run only locally, on macOS with Node 22.22.0. CI on Ubuntu runs lint, typecheck, `npm test`, `check:package`, and `smoke:install` for each Pi and Node pair; it last passed on 2026-09-29 at commit `6e141e1`, after the license change.
 - Physical IME composition and candidate windows; the PTY sends committed text only. How themes look, and switching themes while Pi runs. Terminal emulators, tmux or screen, and keys that need the Kitty keyboard protocol (`super`, `ctrl+shift`).
 - Real images: clipboard paste, drag and drop, and CLI image arguments. The warning was checked with an image path typed into the draft.
 - Real model providers. The scripted model drives Pi's real agent loop, queues, and compaction, but not HTTP, retries in the TUI, or automatic (threshold or overflow) compaction in the TUI.
