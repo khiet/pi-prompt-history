@@ -4,7 +4,9 @@ import {
 	chmod,
 	mkdir,
 	mkdtemp,
+	readdir,
 	readFile,
+	rename,
 	rm,
 	stat,
 	writeFile,
@@ -104,13 +106,15 @@ describe("history store", () => {
 		);
 
 		const history = openHistory(paths);
-		const { records: found } = await history.search({
+		const { records: found, malformed } = await history.search({
 			query: "",
 			cwd: "/work/a",
 		});
 		assert.deepEqual(found, [
 			{ v: 1, id: "a", text: "kept", cwd: "/work/a", session: "s", ts: 1 },
 		]);
+		// Blank lines are not counted.
+		assert.equal(malformed, 5);
 	});
 
 	test("never rewrites the file when reading", async () => {
@@ -132,6 +136,7 @@ describe("history store", () => {
 		assert.deepEqual(await history.search({ query: "", cwd: "/work/a" }), {
 			records: [],
 			capped: false,
+			malformed: 0,
 		});
 		await history.close();
 		await assert.rejects(stat(paths.dir), { code: "ENOENT" });
@@ -173,12 +178,214 @@ describe("history store", () => {
 		await history.close();
 	});
 
+	test("sees a rewrite by another writer even at the same size", async () => {
+		await mkdir(paths.dir, { recursive: true });
+		await writeFile(paths.historyFile, line({ id: "a", text: "before" }));
+		const history = openHistory(paths);
+		assert.equal(
+			(await history.search({ query: "" })).records[0]?.text,
+			"before",
+		);
+
+		const replacement = join(paths.dir, "replacement");
+		await writeFile(replacement, line({ id: "a", text: "after!" }));
+		await rename(replacement, paths.historyFile);
+		assert.equal(
+			(await history.search({ query: "" })).records[0]?.text,
+			"after!",
+		);
+	});
+
+	test("treats a file deleted after loading as empty", async () => {
+		const history = openHistory(paths);
+		await history.record(entry("gone"));
+		await history.search({ query: "" });
+		await rm(paths.historyFile);
+
+		assert.deepEqual((await history.search({ query: "" })).records, []);
+		await history.close();
+	});
+
+	test("recovers once an unreadable file is readable again", {
+		skip: skipPermissionTests,
+	}, async () => {
+		await mkdir(paths.dir, { recursive: true });
+		await writeFile(paths.historyFile, line({ id: "a", text: "kept" }));
+		const history = openHistory(paths);
+		await history.search({ query: "" });
+
+		await chmod(paths.historyFile, 0o000);
+		await assert.rejects(history.search({ query: "" }), { code: "EACCES" });
+		await chmod(paths.historyFile, 0o600);
+
+		assert.equal(
+			(await history.search({ query: "" })).records[0]?.text,
+			"kept",
+		);
+	});
+
+	test("keeps accepting appends while the file is unreadable", {
+		skip: skipPermissionTests,
+	}, async () => {
+		await mkdir(paths.dir, { recursive: true });
+		await writeFile(paths.historyFile, line({ id: "a", text: "kept" }));
+		await chmod(paths.historyFile, 0o200);
+		const history = openHistory(paths);
+		try {
+			assert.equal(await history.record(entry("while broken")), "recorded");
+		} finally {
+			await chmod(paths.historyFile, 0o600);
+		}
+		const texts = (await history.search({ query: "" })).records.map(
+			(record) => record.text,
+		);
+		assert.deepEqual(texts.sort(), ["kept", "while broken"]);
+		await history.close();
+	});
+
 	test("refuses records after close, and close is idempotent", async () => {
 		const history = openHistory(paths);
 		await history.close();
 		await history.close();
 		assert.equal(await history.record(entry("late")), "closed");
 		await assert.rejects(stat(paths.historyFile), { code: "ENOENT" });
+	});
+});
+
+describe("history retention", () => {
+	/** Writes `count` records with ts 1..count, ids derived from ts. */
+	const seedCount = async (count: number, extra = "") => {
+		await mkdir(paths.dir, { recursive: true });
+		await writeFile(
+			paths.historyFile,
+			Array.from({ length: count }, (_, i) =>
+				line({ id: `id-${String(i + 1).padStart(5, "0")}`, ts: i + 1 }),
+			).join("") + extra,
+		);
+	};
+
+	const storedLines = async () =>
+		(await readFile(paths.historyFile, "utf8"))
+			.split("\n")
+			.filter((l) => l !== "");
+
+	test("keeps appending without a rewrite up to 11,000 records", async () => {
+		await seedCount(10_999);
+		const history = openHistory(paths);
+		await history.record(entry("the 11,000th"));
+		await history.close();
+
+		assert.equal((await storedLines()).length, 11_000);
+	});
+
+	test("compacts to the newest 10,000 once an append passes 11,000", async () => {
+		await seedCount(11_000);
+		const history = openHistory(paths);
+		assert.equal(await history.record(entry("newest")), "recorded");
+
+		const kept = (await storedLines()).map((l) => JSON.parse(l));
+		assert.equal(kept.length, 10_000);
+		assert.ok(kept.some((record) => record.text === "newest"));
+		// The newest 9,999 seeded records survive: ts 1,002..11,000.
+		const seeded = kept.filter((record) => record.text !== "newest");
+		assert.equal(Math.min(...seeded.map((record) => record.ts)), 1_002);
+
+		const all = await history.search({ query: "" });
+		assert.equal(all.records[0]?.text, "newest");
+		await history.close();
+	});
+
+	test("breaks retention ties by id, like search order", async () => {
+		// 10,001 records share ts 5; the one with the lowest id is dropped.
+		await mkdir(paths.dir, { recursive: true });
+		await writeFile(
+			paths.historyFile,
+			Array.from({ length: 11_000 }, (_, i) =>
+				line({
+					id: `id-${String(i).padStart(5, "0")}`,
+					ts: i < 1_000 ? 1 : 5,
+				}),
+			).join(""),
+		);
+		const history = openHistory(paths);
+		await history.record(entry("newest"));
+		await history.close();
+
+		const ids = (await storedLines()).map((l) => JSON.parse(l).id);
+		assert.equal(ids.length, 10_000);
+		assert.ok(!ids.includes("id-01000"));
+		assert.ok(ids.includes("id-01001"));
+	});
+
+	test("rewrites with private permissions and keeps appending afterwards", {
+		skip: skipPermissionTests,
+	}, async () => {
+		await seedCount(11_000);
+		await chmod(paths.historyFile, 0o644);
+		const history = openHistory(paths);
+		await history.record(entry("compacting"));
+		assert.equal((await stat(paths.historyFile)).mode & 0o777, 0o600);
+
+		await history.record(entry("after"));
+		await history.close();
+		const reopened = openHistory(paths);
+		const texts = (await reopened.search({ query: "", cwd: "/work/a" })).records
+			.slice(0, 2)
+			.map((record) => record.text);
+		assert.deepEqual(texts.sort(), ["after", "compacting"]);
+		assert.equal((await storedLines()).length, 10_001);
+	});
+
+	test("drops malformed lines only when compacting", async () => {
+		await seedCount(11_000, "torn line\n");
+		const history = openHistory(paths);
+		await history.record(entry("newest"));
+		await history.close();
+
+		assert.ok(!(await storedLines()).includes("torn line"));
+	});
+
+	test("keeps the original and leaves no temporary file when a rewrite cannot be prepared", {
+		skip: skipPermissionTests,
+	}, async () => {
+		await seedCount(11_000);
+		const history = openHistory(paths);
+		await chmod(paths.dir, 0o500);
+		try {
+			await assert.rejects(history.record(entry("newest")), {
+				name: "CompactionError",
+				code: "EACCES",
+			});
+		} finally {
+			await chmod(paths.dir, 0o700);
+		}
+		// The append itself landed; only the rewrite failed.
+		assert.equal((await storedLines()).length, 11_001);
+		assert.deepEqual(await readdir(paths.dir), ["history.jsonl"]);
+
+		// Retrying after the problem is fixed compacts.
+		await history.record(entry("retry"));
+		await history.close();
+		assert.equal((await storedLines()).length, 10_000);
+	});
+
+	test("never rewrites an unreadable file", {
+		skip: skipPermissionTests,
+	}, async () => {
+		await seedCount(11_000);
+		const history = openHistory(paths);
+		await history.search({ query: "" });
+		await chmod(paths.historyFile, 0o200);
+		try {
+			await assert.rejects(history.record(entry("newest")), {
+				name: "CompactionError",
+				code: "EACCES",
+			});
+		} finally {
+			await chmod(paths.historyFile, 0o600);
+		}
+		assert.equal((await storedLines()).length, 11_001);
+		await history.close();
 	});
 });
 

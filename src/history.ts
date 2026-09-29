@@ -1,5 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import {
+	appendFile,
+	mkdir,
+	readFile,
+	rename,
+	rm,
+	stat,
+	writeFile,
+} from "node:fs/promises";
+import { basename, join } from "node:path";
 import type { StorePaths } from "./config.ts";
 
 /** Larger prompts are skipped, never truncated, so every stored line stays small. */
@@ -32,10 +41,17 @@ export type SearchResult = {
 	records: HistoryRecord[];
 	/** More records matched than were returned. */
 	capped: boolean;
+	/** Lines in the file that were skipped because they are not records. */
+	malformed: number;
 };
 
 export type History = {
-	/** Appends one line. Rejects on I/O failure; the caller decides how to report it. */
+	/**
+	 * Appends one line, then compacts when the count passes COMPACT_ABOVE.
+	 * Rejects with CompactionError when the append landed but the rewrite
+	 * failed, and with the I/O error when the append itself failed; the caller
+	 * decides how to report either.
+	 */
 	record(
 		entry: Pick<HistoryRecord, "text" | "cwd" | "session">,
 	): Promise<RecordOutcome>;
@@ -44,19 +60,62 @@ export type History = {
 	 * literal substring test after `toLowerCase()` on both sides: simple case
 	 * mappings apply in any script, but there is no locale-aware or full case
 	 * folding ("ß" never matches "ss") and no Unicode normalization (composed
-	 * and decomposed accents differ). Rejects when the file exists but cannot
-	 * be read; never recreates or rewrites it.
+	 * and decomposed accents differ). Reloads first when the file changed since
+	 * the last load, so other processes' appends appear. Rejects when the file
+	 * exists but cannot be read, rather than answering from earlier records;
+	 * never recreates or rewrites it.
 	 */
 	search(request: SearchRequest): Promise<SearchResult>;
 	/** Waits for pending appends; later records are refused. Safe to call twice. */
 	close(): Promise<void>;
 };
 
-/** Performs no I/O until the first record or search. */
+/** Records kept by every rewrite, newest first by the search order. */
+export const MAX_RECORDS = 10_000;
+
+/**
+ * An append that takes the count past this compacts to MAX_RECORDS. The
+ * slack keeps rewrites to one per thousand appends.
+ */
+export const COMPACT_ABOVE = MAX_RECORDS + 1_000;
+
+/** The record was appended, but trimming the file to MAX_RECORDS failed. */
+export class CompactionError extends Error {
+	override name = "CompactionError";
+	readonly code: string | undefined;
+	constructor(cause: unknown) {
+		const code = (cause as NodeJS.ErrnoException | undefined)?.code;
+		super(`history compaction failed (${code ?? "unexpected error"})`, {
+			cause,
+		});
+		this.code = code;
+	}
+}
+
+/** What was loaded, and the file identity it came from. */
+type Snapshot = {
+	records: HistoryRecord[];
+	/** Lines that were not blank and could not be read as a record. */
+	malformed: number;
+	/** Undefined when the file did not exist. */
+	stamp: string | undefined;
+};
+
+/**
+ * Performs no I/O until the first record or search.
+ *
+ * Rewrites (compaction) replace the file by rename without locking. Another
+ * process's append that lands between this process reading the file and
+ * renaming over it, or that opened the old file before the rename, is lost.
+ * Appends are one write per line in append mode, which local filesystems
+ * keep whole; network filesystems may not.
+ */
 export function openHistory(paths: StorePaths): History {
 	let closed = false;
 	let directoryReady = false;
-	// Appends run one at a time so lines land in submission order.
+	let loaded: Snapshot | undefined;
+	// Appends and rewrites run one at a time so lines land in submission order
+	// and a rewrite never races this process's own appends.
 	let pending: Promise<unknown> = Promise.resolve();
 
 	const append = async (line: string) => {
@@ -65,8 +124,47 @@ export function openHistory(paths: StorePaths): History {
 			directoryReady = true;
 		}
 		// Opening per record, rather than holding a descriptor, keeps appends on
-		// whatever file currently sits at the path.
+		// whatever file currently sits at the path, including after a rewrite.
 		await appendFile(paths.historyFile, line, { flag: "a", mode: 0o600 });
+	};
+
+	/** Reloads when the file's identity changed; a failure drops the cache. */
+	const refresh = async (): Promise<Snapshot> => {
+		try {
+			const stamp = await fileStamp(paths.historyFile);
+			if (loaded && loaded.stamp === stamp) return loaded;
+			loaded =
+				stamp === undefined
+					? { records: [], malformed: 0, stamp }
+					: { ...parse(await readFile(paths.historyFile, "utf8")), stamp };
+			return loaded;
+		} catch (error) {
+			loaded = undefined;
+			throw error;
+		}
+	};
+
+	const compact = async () => {
+		// Reads afresh so records other processes appended are kept too.
+		const { records } = await refresh();
+		const kept = [...records].sort(newestFirst).slice(0, MAX_RECORDS);
+		const temp = join(
+			paths.dir,
+			`.${basename(paths.historyFile)}.${randomUUID()}.tmp`,
+		);
+		try {
+			// Oldest first, so the file still reads in append order.
+			const body = kept
+				.reverse()
+				.map((record) => `${JSON.stringify(record)}\n`)
+				.join("");
+			await writeFile(temp, body, { flag: "wx", mode: 0o600 });
+			await rename(temp, paths.historyFile);
+		} catch (error) {
+			await rm(temp, { force: true }).catch(() => {});
+			throw error;
+		}
+		loaded = undefined;
 	};
 
 	return {
@@ -82,7 +180,22 @@ export function openHistory(paths: StorePaths): History {
 				session: entry.session,
 				ts: Date.now(),
 			};
-			const write = pending.then(() => append(`${JSON.stringify(record)}\n`));
+			const write = pending.then(async () => {
+				// Loading once gives the count that decides compaction; after that,
+				// appends only add to memory and stay cheap. An unreadable file
+				// still takes appends, and search reports it.
+				if (!loaded) await refresh().catch(() => {});
+				await append(`${JSON.stringify(record)}\n`);
+				if (!loaded) return;
+				// The file's stamp no longer matches, so the next search reloads.
+				loaded.records.push(record);
+				if (loaded.records.length <= COMPACT_ABOVE) return;
+				try {
+					await compact();
+				} catch (error) {
+					throw new CompactionError(error);
+				}
+			});
 			pending = write.catch(() => {});
 			await write;
 			return "recorded";
@@ -90,21 +203,11 @@ export function openHistory(paths: StorePaths): History {
 
 		async search({ query, cwd }) {
 			await pending;
-			let content: string;
-			try {
-				content = await readFile(paths.historyFile, "utf8");
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code === "ENOENT")
-					return { records: [], capped: false };
-				throw error;
-			}
+			const { records, malformed } = await refresh();
 			const needle = query.toLowerCase();
-			const matches = content
-				.split("\n")
-				.map(parseRecord)
+			const matches = records
 				.filter(
-					(record): record is HistoryRecord =>
-						record !== undefined &&
+					(record) =>
 						(cwd === undefined || record.cwd === cwd) &&
 						record.text.toLowerCase().includes(needle),
 				)
@@ -112,6 +215,7 @@ export function openHistory(paths: StorePaths): History {
 			return {
 				records: matches.slice(0, MAX_RESULTS),
 				capped: matches.length > MAX_RESULTS,
+				malformed,
 			};
 		},
 
@@ -123,11 +227,36 @@ export function openHistory(paths: StorePaths): History {
 }
 
 /**
+ * Identifies the file's content without reading it. Inode catches a rename
+ * over it, and ctime a permission change that makes it unreadable.
+ */
+async function fileStamp(file: string): Promise<string | undefined> {
+	try {
+		const { ino, size, mtimeMs, ctimeMs } = await stat(file);
+		return `${ino}:${size}:${mtimeMs}:${ctimeMs}`;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+		throw error;
+	}
+}
+
+function parse(content: string): Omit<Snapshot, "stamp"> {
+	const records: HistoryRecord[] = [];
+	let malformed = 0;
+	for (const line of content.split("\n")) {
+		if (line.trim() === "") continue;
+		const record = parseRecord(line);
+		if (record) records.push(record);
+		else malformed++;
+	}
+	return { records, malformed };
+}
+
+/**
  * Keeps only the known fields so later versions can add fields without a
- * migration. Blank, torn, or foreign lines yield undefined and are skipped.
+ * migration. Torn or foreign lines yield undefined and are skipped.
  */
 function parseRecord(line: string): HistoryRecord | undefined {
-	if (line.trim() === "") return undefined;
 	let value: unknown;
 	try {
 		value = JSON.parse(line);

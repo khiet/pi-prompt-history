@@ -186,6 +186,38 @@ describe("storage", () => {
 		assert.deepEqual(await texts(), ["before restart", "after restart"]);
 	});
 
+	test("warns when trimming history fails, without the prompt", {
+		skip: skipPermissionTests,
+	}, async () => {
+		await mkdir(dirname(store.historyFile), { recursive: true });
+		const line = JSON.stringify({
+			v: 1,
+			id: "i",
+			text: "t",
+			cwd: "/",
+			session: "s",
+			ts: 1,
+		});
+		await writeFile(store.historyFile, `${line}\n`.repeat(11_000));
+		await chmod(dirname(store.historyFile), 0o500);
+		try {
+			const result = await host.input({ text: "secret prompt" });
+			await host.shutdown();
+			assert.deepEqual(result, { action: "continue" });
+		} finally {
+			await chmod(dirname(store.historyFile), 0o700);
+		}
+
+		assert.equal((await store.readLines()).length, 11_001);
+		assert.equal(host.notices.length, 1);
+		const { message, type } = host.notices[0] ?? {};
+		assert.equal(type, "warning");
+		assert.match(message ?? "", /saved the prompt but could not trim/i);
+		assert.match(message ?? "", /EACCES/);
+		assert.ok(message?.includes(dirname(store.historyFile)));
+		assert.ok(!message?.includes("secret"));
+	});
+
 	test("a failed capture still continues and warns without the prompt", async () => {
 		// A directory where the history file belongs makes every append fail.
 		await mkdir(store.historyFile, { recursive: true });
