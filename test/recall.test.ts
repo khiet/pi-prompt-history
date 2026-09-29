@@ -569,6 +569,24 @@ describe("selection", () => {
 	});
 });
 
+describe("Enter during a search", () => {
+	test("typing after a pending Enter cancels it", async () => {
+		await seed([
+			{ text: "want that", ts: 3 },
+			{ text: "want this", ts: 2 },
+			{ text: "other", ts: 1 },
+		]);
+		const { picker, running } = await openHistory();
+
+		picker.press(..."want", keys.enter, ..." th");
+		await picker.until((shown) => !shown.includes("other"));
+		picker.press(keys.escape);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, []);
+	});
+});
+
 describe("previews and metadata", () => {
 	const utc = (iso: string) => Date.parse(`${iso}Z`);
 	let previousTz: string | undefined;

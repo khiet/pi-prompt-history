@@ -10,7 +10,11 @@ import {
 	SelectList,
 	truncateToWidth,
 } from "@earendil-works/pi-tui";
-import { type HistoryRecord, MAX_RESULTS } from "./history.ts";
+import {
+	type HistoryRecord,
+	MAX_RESULTS,
+	type SearchRequest,
+} from "./history.ts";
 
 const VISIBLE_ROWS = 10;
 const PREVIEW_LINES = 8;
@@ -20,11 +24,7 @@ export type PickerContent =
 	| { kind: "records"; records: readonly HistoryRecord[]; capped: boolean }
 	| { kind: "unavailable"; guidance: string };
 
-/** `cwd` undefined searches every directory. */
-export type PickerSearch = (request: {
-	query: string;
-	cwd: string | undefined;
-}) => Promise<PickerContent>;
+export type PickerSearch = (request: SearchRequest) => Promise<PickerContent>;
 
 export type PickerOptions = {
 	/** The directory the picker opens scoped to. */
@@ -56,7 +56,8 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 	// Only the newest search may replace the results.
 	let latestSearch = 0;
 	let searching = false;
-	// Enter pressed mid-search applies to the results the user is waiting for.
+	// Enter pressed mid-search applies to the results the user is waiting for,
+	// unless another key arrives first.
 	let confirmWhenSettled = false;
 
 	const listTheme = {
@@ -77,9 +78,15 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 		if (record) done(record.text);
 	};
 
+	const metadata = (record: HistoryRecord) =>
+		[
+			formatTimestamp(record.ts),
+			...(allDirectories ? [displayLine(record.cwd)] : []),
+		].join("  ");
+
 	// SelectList has no way to replace its items, and its own filter is a
 	// prefix match, so each result set builds a fresh list, selecting the top.
-	const show = (next: PickerContent) => {
+	const setResults = (next: PickerContent) => {
 		content = next;
 		const records = next.kind === "records" ? next.records : [];
 		byId = new Map(records.map((record) => [record.id, record]));
@@ -90,17 +97,14 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 						records.map((record) => ({
 							value: record.id,
 							label: displayLine(record.text),
-							description: [
-								formatTimestamp(record.ts),
-								...(allDirectories ? [displayLine(record.cwd)] : []),
-							].join("  "),
+							description: metadata(record),
 						})),
 						VISIBLE_ROWS,
 						listTheme,
 						{ minPrimaryColumnWidth: 20, maxPrimaryColumnWidth: 60 },
 					);
 	};
-	show(options.initial);
+	setResults(options.initial);
 
 	const refresh = () => {
 		const id = ++latestSearch;
@@ -113,7 +117,7 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 			.then((next) => {
 				if (id !== latestSearch) return;
 				searching = false;
-				show(next);
+				setResults(next);
 				if (confirmWhenSettled) {
 					confirmWhenSettled = false;
 					confirm();
@@ -159,13 +163,7 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 		const hidden = lines.length - shown.length;
 		return [
 			"",
-			theme.fg(
-				"muted",
-				[
-					formatTimestamp(record.ts),
-					...(allDirectories ? [displayLine(record.cwd)] : []),
-				].join("  "),
-			),
+			theme.fg("muted", metadata(record)),
 			...shown.map((line) => `  ${displayLine(line)}`),
 			...(hidden > 0 ? [theme.fg("dim", `  ... ${hidden} more lines`)] : []),
 		];
@@ -199,8 +197,10 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 			list?.invalidate();
 		},
 		handleInput(data) {
+			const confirming = keybindings.matches(data, "tui.select.confirm");
+			if (!confirming) confirmWhenSettled = false;
 			if (keybindings.matches(data, "tui.select.cancel")) done(undefined);
-			else if (keybindings.matches(data, "tui.select.confirm")) {
+			else if (confirming) {
 				if (searching) confirmWhenSettled = true;
 				else confirm();
 			} else if (
@@ -237,8 +237,8 @@ function displayLine(text: string): string {
 	return Array.from(text.replace(/[\t\n\r]+/g, " "), (char) => {
 		const code = char.charCodeAt(0);
 		if (code < 0x20) return String.fromCharCode(0x2400 + code);
-		if (code === 0x7f) return "␡";
-		if (code >= 0x80 && code <= 0x9f) return "�";
+		if (code === 0x7f) return "\u2421";
+		if (code >= 0x80 && code <= 0x9f) return "\ufffd";
 		return char;
 	}).join("");
 }
