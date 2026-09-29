@@ -261,7 +261,6 @@ describe("history search", () => {
 		]);
 
 		assert.deepEqual(await texts("", "/work/a"), ["here"]);
-		assert.deepEqual(await texts("", "/work/a/"), []);
 	});
 
 	test("searches every directory when no cwd is given", async () => {

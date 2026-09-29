@@ -37,7 +37,6 @@ export const keys = {
 	enter: "\r",
 	escape: "\x1b",
 	tab: "\t",
-	backspace: "\x7f",
 };
 
 export type ContextOptions = {
