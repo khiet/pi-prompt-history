@@ -278,7 +278,7 @@ describe("history retention", () => {
 	});
 
 	test("breaks retention ties by id, like search order", async () => {
-		// 10,001 records share ts 5; the one with the lowest id is dropped.
+		// Only 9,999 of the 10,000 records at ts 5 fit beside the new one; the lowest id goes.
 		await mkdir(paths.dir, { recursive: true });
 		await writeFile(
 			paths.historyFile,
