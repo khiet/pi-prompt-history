@@ -1,6 +1,18 @@
 # pi-prompt-history
 
-**Development only - not a release.** A Pi extension that records the prompts you type to a local JSONL file, as the storage and capture foundation for a searchable prompt history. There is no `/history` picker, shortcut, recall, pause, or deletion yet; those arrive with [#3](https://github.com/khiet/pi-prompt-history/issues/3), [#4](https://github.com/khiet/pi-prompt-history/issues/4), [#5](https://github.com/khiet/pi-prompt-history/issues/5), [#6](https://github.com/khiet/pi-prompt-history/issues/6), and [#8](https://github.com/khiet/pi-prompt-history/issues/8). [The PRD](https://github.com/khiet/pi-prompt-history/issues/1) is the full contract. The package is `private` and must not be published.
+**Development only - not a release.** A Pi extension that records the prompts you type to a local JSONL file and recalls recent ones from the current directory with `/history`. Search across directories, a shortcut, pause, and deletion are not built yet; they arrive with [#4](https://github.com/khiet/pi-prompt-history/issues/4), [#5](https://github.com/khiet/pi-prompt-history/issues/5), [#6](https://github.com/khiet/pi-prompt-history/issues/6), and [#8](https://github.com/khiet/pi-prompt-history/issues/8). [The PRD](https://github.com/khiet/pi-prompt-history/issues/1) is the full contract. The package is `private` and must not be published.
+
+## Usage
+
+Type `/history` in Pi's interactive TUI. A picker opens with an empty query, listing the newest 100 prompts recorded in the current directory (the exact cwd string), newest first.
+
+- Up/Down selects. Typing filters to prompts containing the query, ignoring case.
+- Enter puts the selected prompt in the editor without sending it. It **replaces the whole draft**. If the draft contains an image (Pi keeps a pasted or dropped image as a `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, or `.bmp` file path in the text), you are asked to confirm first, because the image is replaced too. Images from the recalled prompt were never stored and are not restored.
+- Escape closes the picker and leaves the draft, including any image, unchanged.
+
+Restored text is the stored text as Pi's editor normalizes it: tabs become spaces and CR/CRLF become LF. The stored record itself is never changed. The list shows each prompt on one line with terminal control characters drawn as visible symbols; the restored text keeps them.
+
+If nothing has been recorded in this directory, the picker says so. If the history file cannot be read, the picker shows it as unavailable with the file and error code instead of any earlier results, and leaves the file untouched. `/history` does nothing outside the TUI, and only one picker opens at a time.
 
 ## Privacy: what loading this extension changes
 
@@ -10,7 +22,7 @@ Loading the extension adds a **second, plain-text copy** of your typed prompts, 
 <agent dir>/prompt-history/history.jsonl
 ```
 
-`<agent dir>` is Pi's `getAgentDir()`: `~/.pi/agent` by default, or `PI_CODING_AGENT_DIR` when set. Anything you type, including secrets pasted into a prompt, is kept there until you remove it. This slice has no pause and no delete, so the only way to remove entries is to edit or delete that file yourself. Deleting it does not touch Pi's sessions and does not guarantee erasure from backups or disk.
+`<agent dir>` is Pi's `getAgentDir()`: `~/.pi/agent` by default, or `PI_CODING_AGENT_DIR` when set. Anything you type, including secrets pasted into a prompt, is kept there until you remove it. There is no pause or delete yet, so the only way to remove entries is to edit or delete that file yourself. Deleting it does not touch Pi's sessions and does not guarantee erasure from backups or disk.
 
 - The directory is created with mode `0700` and the file with `0600` where the platform supports it. Existing permissions are not changed.
 - History is never exposed to the model: no tool, no context injection.
@@ -75,15 +87,16 @@ pi install /absolute/path/to/pi-prompt-history
 
 Layout:
 
-- `src/index.ts`: the one extension entry point. Pi registration, the capture policy, lifecycle, and warnings.
+- `src/index.ts`: the one extension entry point. Pi registration, the capture policy, the `/history` command, lifecycle, and warnings.
 - `src/history.ts`: the JSONL store. File I/O only; knows nothing about Pi.
+- `src/picker.ts`: the `/history` picker, composed from Pi's `Input` and `SelectList`. No file I/O.
 - `src/config.ts`: store paths from `getAgentDir()`.
 - `test/`: behavior tests. `harness.ts` is a minimal host that records registered handlers and fires events at them; it is not a Pi runtime.
 - `spike/` and `docs/research/`: the compatibility spike (`npm run spike`) and research that shaped the design.
 
-The extension registers handlers only; it opens nothing until the first eligible prompt. Each Pi session runtime (startup, `/reload`, `/new`, `/resume`, `/fork`) gets a fresh extension instance, and `session_shutdown` stops capture, waits for pending writes, and closes the store, so a replaced runtime never records.
+The extension registers handlers only; it opens nothing until the first eligible prompt or `/history`. Each Pi session runtime (startup, `/reload`, `/new`, `/resume`, `/fork`) gets a fresh extension instance, and `session_shutdown` stops capture, waits for pending writes, and closes the store, so a replaced runtime never records, and a picker still open when its session shuts down restores nothing.
 
-Only `@earendil-works/pi-coding-agent` is imported at runtime, as a `*` peer dependency; there are no other runtime dependencies. The published-files allowlist is in `package.json`.
+Only `@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui` are imported at runtime, both as `*` peer dependencies; there are no other runtime dependencies. The published-files allowlist is in `package.json`.
 
 ## Tested compatibility
 
@@ -104,6 +117,7 @@ Not verified, and required before any release:
 - Capture in the real TUI with a real provider: streaming, steering and follow-up keystrokes, replay and retry paths, and prompts queued during compaction.
 - Exclusion of input from real print, JSON, and RPC frontends.
 - Lifecycle races in real Pi: repeated shutdown delivery and writes still pending during session replacement.
-- Real attachments: clipboard and drag-and-drop images alongside text.
+- Real attachments: clipboard and drag-and-drop images alongside text, and the image warning before `/history` replaces such a draft.
+- The `/history` picker in the real TUI: restoration and editor normalization, cancellation, IME composition, themes, resizing, and narrow terminals.
 - Concurrent appends from several Pi processes (owned by [#7](https://github.com/khiet/pi-prompt-history/issues/7)).
 - Any Pi release other than 0.85.1 and 0.87.1, and any other Node version or platform.

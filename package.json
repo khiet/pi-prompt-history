@@ -2,7 +2,7 @@
 	"name": "pi-prompt-history",
 	"version": "0.0.0",
 	"private": true,
-	"description": "Development-only Pi extension that records typed prompts to a local JSONL history.",
+	"description": "Development-only Pi extension that records typed prompts to a local JSONL history and recalls them with /history.",
 	"keywords": [
 		"pi-package"
 	],
@@ -11,6 +11,7 @@
 	"files": [
 		"src/index.ts",
 		"src/history.ts",
+		"src/picker.ts",
 		"src/config.ts"
 	],
 	"pi": {
@@ -27,12 +28,14 @@
 		"spike": "node spike/sdk.mjs && python3 spike/tui.py"
 	},
 	"peerDependencies": {
-		"@earendil-works/pi-coding-agent": "*"
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.8",
 		"@earendil-works/pi-ai": "0.85.1",
 		"@earendil-works/pi-coding-agent": "0.85.1",
+		"@earendil-works/pi-tui": "0.85.1",
 		"@types/node": "22.20.4",
 		"typescript": "7.0.2"
 	}

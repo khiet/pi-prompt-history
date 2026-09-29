@@ -11,11 +11,27 @@ import type {
 	InputEvent,
 	InputEventResult,
 } from "@earendil-works/pi-coding-agent";
+import { type Component, getKeybindings } from "@earendil-works/pi-tui";
 import promptHistory from "../src/index.ts";
 
 type Handler = (event: unknown, ctx: ExtensionContext) => unknown;
+type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
 
 export type Notice = { message: string; type: string | undefined };
+
+/** A picker the extension opened with `ui.custom()`, driven by raw key data. */
+export type Picker = {
+	render(width?: number): string[];
+	press(...keys: string[]): void;
+};
+
+/** Raw terminal key sequences for driving a picker. */
+export const keys = {
+	up: "\x1b[A",
+	down: "\x1b[B",
+	enter: "\r",
+	escape: "\x1b",
+};
 
 export type ContextOptions = {
 	mode?: ExtensionContext["mode"];
@@ -30,10 +46,26 @@ export type ContextOptions = {
 	notifyThrows?: boolean;
 };
 
+/**
+ * The host's core editor and dialogs, shared by every context, as Pi's are.
+ * Writes are recorded verbatim; the harness does not model Pi's editor
+ * normalization.
+ */
+export type HostUI = {
+	draft: string;
+	editorWrites: string[];
+	confirms: { title: string; message: string }[];
+	/** What the next confirmation dialogs answer. */
+	confirmAnswer: boolean;
+	/** Pickers opened so far, oldest first. */
+	pickers: Picker[];
+};
+
 export type Host = {
 	/** Everything the factory registered, by kind, for registration assertions. */
 	registrations: string[];
 	notices: Notice[];
+	ui: HostUI;
 	context(options?: ContextOptions): ExtensionContext;
 	input(
 		event: Partial<InputEvent> & { text: string },
@@ -42,19 +74,67 @@ export type Host = {
 	/** Fires any other event, for lifecycle cases with no dedicated helper. */
 	fire(name: string, event: object, ctx?: ExtensionContext): Promise<unknown>;
 	shutdown(reason?: string): Promise<void>;
+	/** Runs a registered command; settles when its handler does. */
+	command(name: string, args?: string, ctx?: ExtensionContext): Promise<void>;
+	/** Resolves with the next picker the extension opens. */
+	nextPicker(): Promise<Picker>;
 };
 
 export function loadExtension(): Host {
 	const handlers = new Map<string, Handler[]>();
+	const commands = new Map<string, CommandHandler>();
 	const registrations: string[] = [];
 	const notices: Notice[] = [];
+	const ui: HostUI = {
+		draft: "",
+		editorWrites: [],
+		confirms: [],
+		confirmAnswer: true,
+		pickers: [],
+	};
+	const pickerWaiters: ((picker: Picker) => void)[] = [];
 	const record =
 		(kind: string) =>
 		(name: string, ...rest: unknown[]) => {
 			registrations.push(`${kind}:${name}`);
 			if (kind === "on")
 				handlers.set(name, [...(handlers.get(name) ?? []), rest[0] as Handler]);
+			if (kind === "registerCommand")
+				commands.set(name, (rest[0] as { handler: CommandHandler }).handler);
 		};
+
+	// A plain theme keeps rendered lines free of ANSI styling, so any escape
+	// sequence in the output came from the rendered content itself.
+	const theme = { fg: (_color: string, text: string) => text };
+	const custom = async <T>(
+		factory: (
+			tui: { requestRender(): void },
+			theme: unknown,
+			keybindings: unknown,
+			done: (result: T) => void,
+		) => Component | Promise<Component>,
+	): Promise<T> => {
+		let done!: (result: T) => void;
+		const result = new Promise<T>((resolve) => {
+			done = resolve;
+		});
+		const component = await factory(
+			{ requestRender: () => {} },
+			theme,
+			getKeybindings(),
+			done,
+		);
+		if ("focused" in component) component.focused = true;
+		const picker: Picker = {
+			render: (width = 80) => component.render(width),
+			press: (...data) => {
+				for (const key of data) component.handleInput?.(key);
+			},
+		};
+		ui.pickers.push(picker);
+		for (const waiter of pickerWaiters.splice(0)) waiter(picker);
+		return result;
+	};
 	const api = new Proxy(
 		{},
 		{
@@ -88,6 +168,16 @@ export function loadExtension(): Host {
 					notices.push({ message, type });
 					if (options.notifyThrows) throw new Error("notify failed");
 				},
+				custom,
+				getEditorText: () => ui.draft,
+				setEditorText: (text: string) => {
+					ui.editorWrites.push(text);
+					ui.draft = text;
+				},
+				confirm: async (title: string, message: string) => {
+					ui.confirms.push({ title, message });
+					return ui.confirmAnswer;
+				},
 			},
 		} as unknown as ExtensionContext;
 	};
@@ -104,6 +194,7 @@ export function loadExtension(): Host {
 	return {
 		registrations,
 		notices,
+		ui,
 		context,
 		input: (event, ctx = context()) =>
 			fire(
@@ -120,6 +211,15 @@ export function loadExtension(): Host {
 				context(),
 			);
 		},
+		command: async (name, args = "", ctx = context()) => {
+			const handler = commands.get(name);
+			if (!handler) throw new Error(`no command registered as ${name}`);
+			await handler(args, ctx);
+		},
+		nextPicker: () =>
+			new Promise((resolve) => {
+				pickerWaiters.push(resolve);
+			}),
 	};
 }
 
