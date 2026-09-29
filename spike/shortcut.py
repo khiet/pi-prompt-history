@@ -149,12 +149,6 @@ def invalid(pi):
     assert pi.opens("\x12"), "ctrl+r fallback did not open"
 
 
-def reserved(pi):
-    assert "conflicts with built-in shortcut" in pi.text(), "no reserved warning"
-    assert not pi.opens("\x12"), "ctrl+r opened despite reserved binding"
-    assert pi.opens("/history\r"), "/history did not open"
-
-
 def reload(pi):
     assert pi.opens("\x1bh"), "alt+h did not open"
     pi.set_config(json.dumps({"shortcut": "alt+j"}))
@@ -167,8 +161,51 @@ def reload(pi):
 scenario("default ctrl+r shadows rename", default)
 scenario("configured alt+h", custom, config=json.dumps({"shortcut": "alt+h"}))
 scenario("invalid config falls back", invalid, config='{"shortcut": 7}')
-scenario(
-    "reserved ctrl+r keeps /history", reserved, keybindings={"app.clear": "ctrl+r"}
-)
 scenario("reload applies config", reload, config=json.dumps({"shortcut": "alt+h"}))
+
+# Pi's reserved actions (RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS in
+# dist/core/extensions/runner.js, the same list on every tested release).
+# For these three, pressing Ctrl+R would exit, suspend, or leave Pi for an
+# external editor, so only the warning and /history are checked.
+UNPRESSABLE = {"app.exit", "app.suspend", "app.editor.external"}
+RESERVED = [
+    "app.interrupt",
+    "app.clear",
+    "app.exit",
+    "app.suspend",
+    "app.thinking.cycle",
+    "app.model.cycleForward",
+    "app.model.cycleBackward",
+    "app.model.select",
+    "app.tools.expand",
+    "app.thinking.toggle",
+    "app.editor.external",
+    "app.message.copy",
+    "app.message.followUp",
+    "tui.input.submit",
+    "tui.select.confirm",
+    "tui.select.cancel",
+    "tui.input.copy",
+    "tui.editor.deleteToLineEnd",
+]
+
+
+def reserved_by(action):
+    def check(pi):
+        assert "conflicts with built-in shortcut" in pi.text(), "no reserved warning"
+        if action not in UNPRESSABLE:
+            assert not pi.opens("\x12"), "ctrl+r opened despite reserved binding"
+        # Rebinding submit moves it off Enter, so /history is sent with Ctrl+R.
+        submit = "\x12" if action == "tui.input.submit" else "\r"
+        assert pi.opens(f"/history{submit}"), "/history did not open"
+
+    return check
+
+
+for action in RESERVED:
+    scenario(
+        f"reserved {action} on ctrl+r keeps /history",
+        reserved_by(action),
+        keybindings={action: "ctrl+r"},
+    )
 sys.exit(1 if failed else 0)

@@ -2,7 +2,7 @@
 	"name": "pi-prompt-history",
 	"version": "0.0.0",
 	"private": true,
-	"description": "Development-only Pi extension that records typed prompts to a local JSONL history and recalls them with /history.",
+	"description": "Pi extension that records the prompts you type to a local JSONL history and searches them with Ctrl+R or /history.",
 	"keywords": [
 		"pi-package"
 	],
@@ -20,12 +20,15 @@
 		]
 	},
 	"scripts": {
-		"lint": "biome check src test spike/*.mjs spike/*.ts package.json tsconfig.json",
+		"lint": "biome check src test scripts spike/*.mjs spike/*.ts package.json tsconfig.json",
 		"lint:fix": "npm run lint -- --write",
-		"format": "biome format --write src test spike/*.mjs spike/*.ts package.json tsconfig.json",
+		"format": "biome format --write src test scripts spike/*.mjs spike/*.ts package.json tsconfig.json",
 		"typecheck": "tsc -p .",
 		"test": "node --test test/*.test.ts",
-		"spike": "node spike/sdk.mjs && python3 spike/tui.py && python3 spike/shortcut.py && python3 spike/pause.py"
+		"check:package": "node scripts/check-package.mjs",
+		"smoke:install": "node scripts/smoke-install.mjs",
+		"spike": "node spike/sdk.mjs && python3 spike/tui.py && python3 spike/shortcut.py && python3 spike/pause.py",
+		"acceptance": "python3 spike/acceptance.py"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": "*",
