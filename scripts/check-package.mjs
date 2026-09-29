@@ -58,11 +58,10 @@ assert.deepEqual(
 const builtins = new Set(builtinModules);
 for (const file of manifest.files.filter((path) => path.endsWith(".ts"))) {
 	const source = readFileSync(file, "utf8");
-	for (const [, from, dynamic] of source.matchAll(
-		/(?:^|\s)(?:import|export)\s[^;]*?from\s+"([^"]+)"|import\("([^"]+)"\)/gm,
+	for (const [, from, bare, dynamic] of source.matchAll(
+		/(?:^|\s)(?:import|export)\s[^;]*?from\s+"([^"]+)"|^import\s+"([^"]+)"|import\("([^"]+)"\)/gm,
 	)) {
-		const specifier = from ?? dynamic;
-		if (specifier === undefined) continue;
+		const specifier = from ?? bare ?? dynamic ?? "";
 		if (specifier.startsWith(".")) {
 			const target = normalize(join(dirname(file), specifier));
 			assert.ok(manifest.files.includes(target), `${file}: ${specifier}`);

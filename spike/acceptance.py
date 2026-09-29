@@ -53,14 +53,19 @@ def scenario(name):
         try:
             check(root, start)
             print(f"PASS {name}")
-        except AssertionError as error:
+        # Any error fails only this scenario, so the rest still run.
+        except Exception as error:
             failed.append(name)
             screen = pis[-1].text()[-2500:] if pis else ""
             print(f"FAIL {name}: {error}\n--- screen ---\n{screen}")
         finally:
             for pi in pis:
-                pi.close()
+                try:
+                    pi.close()
+                except Exception as error:
+                    print(f"WARN {name}: close failed: {error!r}")
             shutil.rmtree(root, ignore_errors=True)
+        return check
 
     return run
 
@@ -148,6 +153,45 @@ def native(root, start):
     second.wait("start", count)
     second.press(UP)
     assert second.editor() == "native-alpha", "Up did not recall after /resume"
+    second.press("\x03")  # Ctrl+C, Pi's app.clear, empties the draft.
+    count = len(second.events("start")) + 1
+    second.type("/new", wait=1.5)
+    second.wait("start", count)
+    second.press(UP)
+    assert second.editor() == "native-alpha", "Up forgot the prompt after /new"
+
+
+@scenario("capture and the picker work after reload, new, resume, and fork")
+def transitions(root, start):
+    pi = start()
+    for turn in range(1, 10):
+        pi.open_gate(f"turn-{turn}")
+    pi.type("first-session")
+    pi.wait("turn", 1)
+    expected = ["first-session"]
+    for reason, command, picks in [
+        ("reload", "/reload", []),
+        ("new", "/new", []),
+        # The query picks the first session over the current one.
+        ("resume", "/resume", ["first-session", ENTER]),
+        ("fork", "/fork", [ENTER]),
+    ]:
+        count = len(pi.events("start")) + 1
+        pi.type(command, wait=1.5)
+        for keys in picks:
+            pi.press(keys, 1.5)
+        assert pi.wait("start", count)[-1]["reason"] == reason, reason
+        # Forking puts the chosen prompt back in the editor. Ctrl+C clears it;
+        # on an empty draft it would start Pi's double-press exit instead.
+        if pi.editor():
+            pi.press("\x03")
+        turns = len(pi.events("turn")) + 1
+        pi.type(f"after-{reason}")
+        pi.wait("turn", turns)
+        expected.append(f"after-{reason}")
+        assert pi.recorded() == expected, f"{reason}: {pi.recorded()}"
+        assert f"after-{reason}" in pi.press(CTRL_R), f"no picker after {reason}"
+        pi.press(ESC)
 
 
 @scenario("restore replaces the draft with normalized text and never submits")

@@ -29,7 +29,7 @@ jobs:
       - name: Use Pi ${{ matrix.pi }} over the locked 0.85.1
         if: matrix.pi != '0.85.1'
         run: >-
-          npm install --no-save --ignore-scripts --save-exact
+          npm install --no-save --ignore-scripts
           @earendil-works/pi-coding-agent@${{ matrix.pi }}
           @earendil-works/pi-tui@${{ matrix.pi }}
           @earendil-works/pi-ai@${{ matrix.pi }}

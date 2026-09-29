@@ -8,7 +8,9 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 export default function (pi: ExtensionAPI) {
 	const logPath = process.env.DRIVER_LOG;
 	if (!logPath)
-		throw new Error("Run only through spike/pause.py or smoke-install");
+		throw new Error(
+			"Run only through spike/pause.py or scripts/smoke-install.mjs",
+		);
 	const log = (kind: string, data: object = {}) =>
 		appendFileSync(logPath, `${JSON.stringify({ kind, ...data })}\n`);
 

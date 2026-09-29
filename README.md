@@ -123,7 +123,7 @@ Session files are never read to backfill history.
 
 ## Compared with Pi's built-in history
 
-Pi already keeps your prompts: in its session files, which `/resume` and `/tree` search, and in the editor's Up/Down history. Checked in the real TUI on both [tested releases](#tested-compatibility), with sessions written by Pi's own agent loop:
+Pi already keeps your prompts: in its session files, which `/resume` and `/tree` search, and in the editor's Up/Down history. Checked in the real TUI on both [tested releases](#tested-compatibility), with sessions written by Pi's own agent loop driving a scripted model (`spike/scripted.ts`) rather than a real provider:
 
 - In a new Pi process with a new session, Up recalls nothing. After `/resume`, Up recalls that session's prompts. After `/new`, Up still recalls the prompts typed earlier in the same process.
 - This extension's picker finds a prompt typed in an earlier Pi process straight away, without resuming its session.
@@ -178,7 +178,7 @@ npm run spike                   # compatibility spike, shortcut, and pause check
 To check another Pi release, install it over the lockfile, run the checks, then restore the lock:
 
 ```sh
-npm install --no-save --ignore-scripts --save-exact @earendil-works/pi-coding-agent@0.87.1 @earendil-works/pi-tui@0.87.1 @earendil-works/pi-ai@0.87.1
+npm install --no-save --ignore-scripts @earendil-works/pi-coding-agent@0.87.1 @earendil-works/pi-tui@0.87.1 @earendil-works/pi-ai@0.87.1
 npm ci --ignore-scripts
 ```
 
@@ -220,7 +220,7 @@ Recorded on 2026-09-29 on macOS arm64. Real-TUI checks run the real CLI in a PTY
 On both Pi releases, with Node 22.22.0:
 
 - `npm run lint`, `npm run typecheck`, `npm test` (157 tests), `npm run check:package`, and `npm run smoke:install` pass. All of these also pass with Node 24.21.0.
-- `spike/acceptance.py` passes: idle, steering (Enter while streaming), and follow-up (Alt+Enter) prompts are each recorded once, and delivering them records nothing more; prompts queued during `/compact` are recorded as described in [What gets recorded](#what-gets-recorded) (only the first on 0.85.1, each once on 0.87.1); the [built-in history comparison](#compared-with-pis-built-in-history); restore with normalization and without submitting, and Escape keeping the draft; the image warning, declined and accepted; Tab scope and Ctrl+D with its confirmation; `/history clear cwd` and `clear all` through Pi's confirmation dialog, cancelled and accepted; resizing to 24, 10, 200, and 60 columns with the picker open; Japanese, accented, and emoji text typed and found with case-folded and punctuation queries; the light theme; Pi's `modal-editor.ts` example loaded alongside; two Ctrl+R presses leaving one picker; and a picker open while the session is replaced restoring nothing into the new one.
+- `spike/acceptance.py` passes: idle, steering (Enter while streaming), and follow-up (Alt+Enter) prompts are each recorded once, and delivering them records nothing more; prompts queued during `/compact` are recorded as described in [What gets recorded](#what-gets-recorded) (only the first on 0.85.1, each once on 0.87.1); the [built-in history comparison](#compared-with-pis-built-in-history); capture and the picker after `/reload`, `/new`, `/resume`, and `/fork`, with each prompt recorded once; restore with normalization and without submitting, and Escape keeping the draft; the image warning, declined and accepted; Tab scope and Ctrl+D with its confirmation; `/history clear cwd` and `clear all` through Pi's confirmation dialog, cancelled and accepted; resizing to 24, 10, 200, and 60 columns with the picker open, without Pi exiting and with restore still exact afterwards (not how it renders); Japanese, accented, and emoji text typed and found with case-folded and punctuation queries; the picker opening and restoring under the light theme; Pi's `modal-editor.ts` example loaded alongside; two Ctrl+R presses leaving one picker; and a picker open while the session is replaced restoring nothing into the new one.
 - `spike/shortcut.py` passes, including Ctrl+R bound to each of Pi's 18 reserved actions: Pi warns and skips the shortcut, and `/history` still opens. For `app.exit`, `app.suspend`, and `app.editor.external`, Ctrl+R itself was not pressed.
 - `spike/pause.py` and `npm run spike` pass.
 

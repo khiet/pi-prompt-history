@@ -149,12 +149,6 @@ def invalid(pi):
     assert pi.opens("\x12"), "ctrl+r fallback did not open"
 
 
-def reserved(pi):
-    assert "conflicts with built-in shortcut" in pi.text(), "no reserved warning"
-    assert not pi.opens("\x12"), "ctrl+r opened despite reserved binding"
-    assert pi.opens("/history\r"), "/history did not open"
-
-
 def reload(pi):
     assert pi.opens("\x1bh"), "alt+h did not open"
     pi.set_config(json.dumps({"shortcut": "alt+j"}))
@@ -167,9 +161,6 @@ def reload(pi):
 scenario("default ctrl+r shadows rename", default)
 scenario("configured alt+h", custom, config=json.dumps({"shortcut": "alt+h"}))
 scenario("invalid config falls back", invalid, config='{"shortcut": 7}')
-scenario(
-    "reserved ctrl+r keeps /history", reserved, keybindings={"app.clear": "ctrl+r"}
-)
 scenario("reload applies config", reload, config=json.dumps({"shortcut": "alt+h"}))
 
 # Pi's reserved actions (RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS in
@@ -179,6 +170,7 @@ scenario("reload applies config", reload, config=json.dumps({"shortcut": "alt+h"
 UNPRESSABLE = {"app.exit", "app.suspend", "app.editor.external"}
 RESERVED = [
     "app.interrupt",
+    "app.clear",
     "app.exit",
     "app.suspend",
     "app.thinking.cycle",
