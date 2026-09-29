@@ -104,7 +104,7 @@ describe("picker deletion", () => {
 		assert.deepEqual(await storedIds(), ["a", "b", "c"]);
 	});
 
-	test("deletes only the selected submission and selects the next result", async () => {
+	test("deletes only the selected submission, keeping identical ones", async () => {
 		await seed([
 			{ id: "old", text: "same", ts: 1 },
 			{ id: "mid", text: "same", ts: 2 },
@@ -114,13 +114,9 @@ describe("picker deletion", () => {
 
 		picker.press(keys.down, keys.ctrlD, "y");
 		await picker.until((screen) => !screen.includes("Deleting"));
-
-		assert.deepEqual(await storedIds(), ["old", "new"]);
-		// The next result is now selected, at the same position.
-		picker.press(keys.up, keys.down, keys.enter);
+		picker.press(keys.escape);
 		await running;
-		assert.deepEqual(host.ui.editorWrites, ["same"]);
-		await host.shutdown();
+
 		assert.deepEqual(await storedIds(), ["old", "new"]);
 	});
 

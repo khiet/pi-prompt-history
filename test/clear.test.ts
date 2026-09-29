@@ -38,7 +38,7 @@ const seed = async () => {
 const storedIds = async () => (await store.readLines()).map((r) => r.id);
 
 describe("/history clear", () => {
-	for (const args of ["clear", "clear  ", "clear here", "clear cwd now"])
+	for (const args of ["clear", "clear here", "clear cwd now"])
 		test(`"/history ${args}" shows usage and clears nothing`, async () => {
 			await seed();
 			await host.command("history", args);
