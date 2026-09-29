@@ -11,18 +11,28 @@ import { Input, SelectList, truncateToWidth } from "@earendil-works/pi-tui";
 
 const exactText = "  café 日本語 👋\nsecond line  ";
 
+// Owner-approved pause technique, not a documented Pi API: Pi replaces the
+// extension factory on reload/new/resume/fork, but the Node process (and its
+// globalThis) survives, so pause lasts until explicit resume or process exit.
+// Never written to disk.
+type ProcessState = { paused: boolean };
+const processStateKey = Symbol.for("pi-prompt-history/process-state");
+const processSlots = globalThis as Record<symbol, ProcessState | undefined>;
+const processState = processSlots[processStateKey] ?? { paused: false };
+processSlots[processStateKey] = processState;
+
 export default function (pi: ExtensionAPI) {
 	const logPath = process.env.SPIKE_LOG;
 	const sessionPath = process.env.SPIKE_SESSION;
 	if (!logPath || !sessionPath)
 		throw new Error("Run only through spike/tui.py");
 	const instance = randomUUID();
-	let paused = false;
 	let closed = false;
 	const log = (kind: string, data: object = {}) => {
 		appendFileSync(logPath, `${JSON.stringify({ kind, instance, ...data })}\n`);
 	};
 	pi.on("session_start", (event, ctx) => {
+		const { paused } = processState;
 		ctx.ui.setStatus("spike", paused ? "SPIKE PAUSED" : "SPIKE ACTIVE");
 		log("start", {
 			reason: event.reason,
@@ -56,6 +66,7 @@ export default function (pi: ExtensionAPI) {
 			mode: ctx.mode,
 			streamingBehavior: event.streamingBehavior ?? null,
 			images: event.images?.length ?? 0,
+			paused: processState.paused,
 			eligible:
 				event.source === "interactive" &&
 				ctx.mode === "tui" &&
@@ -158,10 +169,13 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("probe", {
 		handler: async (args, ctx) => {
 			log("command", { args });
-			if (args === "pause") {
-				paused = true;
-				ctx.ui.setStatus("spike", "SPIKE PAUSED");
-				log("pause", { paused });
+			if (args === "pause" || args === "unpause") {
+				processState.paused = args === "pause";
+				ctx.ui.setStatus(
+					"spike",
+					processState.paused ? "SPIKE PAUSED" : "SPIKE ACTIVE",
+				);
+				log(args, { paused: processState.paused });
 			} else if (args === "new") {
 				await ctx.newSession();
 				return;

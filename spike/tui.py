@@ -219,12 +219,14 @@ def run(root):
             )
             assert event["source"] == "interactive" and event["mode"] == "tui"
             assert event["streamingBehavior"] is None and event["eligible"]
+            assert event["paused"] is False
         count = len(pi.events())
         pi.send("\x1b[200~  outer whitespace\ninner line  \x1b[201~\r")
         assert pi.wait("input", count)["text"] == "outer whitespace\ninner line"
         count = len([e for e in pi.events() if e["kind"] == "input"])
-        pi.command("/probe pause")
+        pi.command("/probe pause", "pause")
         assert len([e for e in pi.events() if e["kind"] == "input"]) == count
+        pi.command("/probe unpause", "unpause")
         event = pi.command("/probe inject", "input")
         assert event["source"] == "extension" and not event["eligible"]
         pi.command("/probe normalize", "normalize")
@@ -259,18 +261,19 @@ def run(root):
         pi.command("/history", "open")
         pi.send("Second\r")
         assert pi.draft() == "second"
-        # Each transition creates a fresh factory, disproving factory-local pause.
+        # Each transition creates a fresh factory; process-global pause survives
+        # all of them and the fresh instance restores the PAUSED status.
+        pi.command("/probe pause", "pause")
         for command, reason in [
             ("/reload", "reload"),
             ("/probe new", "new"),
             ("/probe resume", "resume"),
             ("/probe fork", "fork"),
         ]:
-            pi.command("/probe pause", "pause")
             count = len(pi.events())
             pi.command(command, "start")
             start = pi.wait("start", count)
-            assert start["reason"] == reason and start["paused"] is False
+            assert start["reason"] == reason and start["paused"] is True
             shutdown = pi.wait("shutdown", count)
             assert (
                 shutdown["reason"] == reason
@@ -282,8 +285,13 @@ def run(root):
             count = len(pi.events())
             pi.send("\x1bk")
             pi.send(f"after-{reason}\r")
-            pi.wait("input", count)
+            assert pi.wait("input", count)["paused"] is True
             assert len([e for e in pi.events()[count:] if e["kind"] == "input"]) == 1
+        count = len(pi.events())
+        pi.command("/probe unpause", "unpause")
+        pi.send("\x1bk")
+        pi.send("after-unpause\r")
+        assert pi.wait("input", count)["paused"] is False
         pi.command("/probe resume", "start")
         pi.send("\x1bk")
         pi.send("\x1b[A")
@@ -311,10 +319,17 @@ def run(root):
         )
     terminal = (pi.root / "terminal.log").read_text(errors="replace")
     assert "SPIKE ACTIVE" in terminal and "SPIKE PAUSED" in terminal
+    starts = [e for e in events if e["kind"] == "start"]
+    assert [e["reason"] for e in starts if e["paused"]] == [
+        "reload",
+        "new",
+        "resume",
+        "fork",
+    ]
     assert "Extension shortcut conflict: 'ctrl+r'" in terminal
     assert any(e["kind"] == "focus" and e["value"] for e in events)
     print(
-        "TUI PASS: idle hook fields/raw slash/transform/source; Ctrl+R and /history; cancel/select/24-column resize; negative image-path and CR/tab restoration; fresh factories and shutdown for reload/new/resume/fork; native history scope."
+        "TUI PASS: idle hook fields/raw slash/transform/source; Ctrl+R and /history; cancel/select/24-column resize; negative image-path and CR/tab restoration; fresh factories and shutdown for reload/new/resume/fork; process-global pause survives them until unpause; native history scope."
     )
     for name, options in [
         ("restart", {"resume": True}),
@@ -326,6 +341,7 @@ def run(root):
     ]:
         pi = Pi(root / name, **options)
         try:
+            # A new process starts unpaused: pause is never restored from disk.
             assert pi.events()[0]["paused"] is False
             if name in ["restart", "fresh"]:
                 pi.send("\x1b[A")
@@ -360,7 +376,7 @@ def run(root):
         finally:
             pi.close()
     print(
-        "TUI PASS: restarted resumed/native and fresh history; ephemeral exclusion; configured Alt+H with Pi example modal editor; reserved Ctrl+R conflict warns/skips, /history and configured Alt+H still work. No provider turns."
+        "TUI PASS: restarted resumed/native and fresh history; pause resets per process; ephemeral exclusion; configured Alt+H with Pi example modal editor; reserved Ctrl+R conflict warns/skips, /history and configured Alt+H still work. No provider turns."
     )
 
 

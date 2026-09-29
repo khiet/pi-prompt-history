@@ -4,7 +4,7 @@
 
 This repository records the bounded investigation for [issue #2](https://github.com/khiet/pi-prompt-history/issues/2), against the guarantees in [the parent PRD](https://github.com/khiet/pi-prompt-history/issues/1). No prompt store, MVP, or release is implemented.
 
-**Result: blocked guarantees and incomplete verification.** Several public integration seams work, but exact arbitrary-text restoration fails, image-path replacement loses the draft reference, and factory-local pause does not survive runtime replacement. No guarantee has been relaxed. Re-run on 2026-09-29 against the minimum (0.85.1) and the newer current stable (0.87.1): all three blockers reproduce on both, and one queue-helper behavior changed in 0.86.0 (see [Version delta](#version-delta-0851-to-0871)). Issue #2 should not be marked fully verified.
+**Result: owner decisions recorded; verification incomplete.** Several public integration seams work, but exact arbitrary-text restoration fails and replacing the draft loses an attached image path; the owner revised both guarantees on 2026-09-29. Factory-local pause does not survive runtime replacement; the owner approved a process-global pause, which passes on both tested releases. Re-run on 2026-09-29 against the minimum (0.85.1) and the newer current stable (0.87.1); one queue-helper behavior changed in 0.86.0 (see [Version delta](#version-delta-0851-to-0871)). Issue #2 should not be marked fully verified: the unverified gates below remain open.
 
 ## Tested environment
 
@@ -68,9 +68,9 @@ Expected result per Pi version: one `SDK PASS`, one `SDK STREAM PASS` (naming th
 | Ctrl+R | **TUI:** with the default editor focused, extension shortcut opens the picker, not rename. Pi emits its built-in conflict warning. With synthetic `app.clear: "ctrl+r"` configuration, Pi warns and skips the extension shortcut: Ctrl+R clears a nonempty draft without opening, renaming or submitting. `/history` still works, as does configured Alt+H in another run with the same reserved binding. Ownership is conditional on keybindings and editor compatibility. |
 | Alternative shortcut / command | **TUI:** `/history` opens; a separately configured `alt+h` opens alongside Pi's bundled `modal-editor.ts` example. The fixture's environment selector is test configuration, not MVP config implementation. |
 | Native history | **TUI:** a new process opening a persisted synthetic session via `--session` recalls its user prompt with Up. Resuming in-process also repopulates history. A subsequent `/new` **retains previous prompts and commands in that process's editor history**. A fresh process with a fresh session recalls nothing, even with a saved fixture in its agent session directory. See the delta below. |
-| Editor restore / cancel | **TUI:** selecting an LF multiline string with outer spaces, accents, Japanese and emoji restores it exactly without input observation/submission. Escape leaves the draft unchanged. **Negative:** CR/CRLF and tabs normalize; see blocker 1. |
-| Images | **S + negative TUI reference test:** replacing text removes the image path embedded in the draft. Cancellation preserves that path. This is **not** a real clipboard/payload-preservation test; see blocker 2. Historical attachment restoration is not implemented. |
-| Process-local pause | **D + negative TUI:** a factory-local boolean resets on reload/new/resume/fork, and on process restart. The paused status is emitted to terminal output; new instances restore ACTIVE, not PAUSED. No compliant process-lifetime mechanism has been demonstrated; see blocker 3. |
+| Editor restore / cancel | **TUI:** selecting an LF multiline string with outer spaces, accents, Japanese and emoji restores it exactly without input observation/submission. Escape leaves the draft unchanged. **Negative:** CR/CRLF and tabs normalize; see decision 1. |
+| Images | **S + negative TUI reference test:** replacing text removes the image path embedded in the draft. Cancellation preserves that path. This is **not** a real clipboard/payload-preservation test; see decision 2. Historical attachment restoration is not implemented. |
+| Process-local pause | **TUI:** pause held in a `Symbol.for("pi-prompt-history/process-state")` slot on `globalThis` survives reload/new/resume/fork: each fresh factory starts paused, restores PAUSED via `setStatus()`, and logs later input as paused. Explicit unpause re-enables recording; every new process starts unpaused. The flag is never written to or read from disk. This is an owner-approved technique, **not** a documented Pi API; see decision 3. |
 | Cleanup / duplicates | **TUI:** one shutdown per observed factory across the tested transitions and quit, no duplicate idle observations/command registrations after reload, and no backfill inputs. The fixture uses idempotent shutdown and avoids using a closed context on picker completion. **Unverified:** repeated shutdown delivery, concurrent/overlapping pickers, delayed stale results during replacement, and resource cleanup under failure/retry. No history-storage resources exist in this spike. |
 | Custom UI | **TUI:** public `custom()`, composed Input/SelectList, injected theme/keybinding manager, propagated input focus, filtering, Down/Enter/Escape, and resize from 100 to 24 columns execute without crash. The component truncates lines and invalidates its children. **Unverified:** physical IME candidates/composition, visual theme changes, all terminal widths/heights, all picker controls (Tab/scope, Ctrl+D/confirmation), terminal-control display safety, and broader editor-extension coexistence. This fixture is not the product picker. |
 
@@ -95,15 +95,17 @@ These are assertions about **hook observations**, not a guarantee that each obse
 
 **Impact (S):** the TUI queues prompts typed during compaction without running input handlers (`queueCompactionMessage`, `dist/modes/interactive/interactive-mode.js` 3781), then flushes the first through `prompt()` and the rest through `steer()`/`followUp()` (3809-3858). On 0.85.1 those later prompts are never observed, a missed-capture gap; on 0.87.1 each is observed once, eligible. Neither version double-captures them. This path is static-only; a real-TUI compaction queue remains unverified. A recorder must also not assume every eligible observation came from the editor: other extensions calling the SDK helpers without a `source` look like typed input.
 
-**Unchanged:** every other SDK and TUI assertion, including all three blocker reproductions, passes identically on both releases. Static checks of 0.87.1 find no documented draft-attachment API or process-lifetime state facility in the extension docs or `ExtensionUIContext` types (`setEditorText`/`getEditorText` only), and `pi-tui`'s editor `setText` still calls `normalizeText`.
+**Unchanged:** every other SDK and TUI assertion, including the text and image blocker reproductions and the process-global pause check, passes identically on both releases. Static checks of 0.87.1 find no documented draft-attachment API or process-lifetime state facility in the extension docs or `ExtensionUIContext` types (`setEditorText`/`getEditorText` only), and `pi-tui`'s editor `setText` still calls `normalizeText`.
 
-## Blocked guarantees - owner decisions required
+## Blockers and owner decisions (2026-09-29)
 
 ### 1. Exact restoration of arbitrary hook text
 
 **Observed:** public `ctx.ui.setEditorText("a\tb\r\nc\rd")`, followed by `getEditorText()`, returns `"a    b\nc\nd"`. Pi's editor normalizes tabs and carriage returns. An earlier input transform can introduce a tab after normal editor processing, so this matters even if ordinary typing already normalizes text.
 
-A selected LF/Unicode example does round-trip, but that cannot justify the PRD's exact-text guarantee for every hook observation. Affected restoration work is stopped. Options for the owner: request upstream exact-text support, or explicitly revise the guarantee to documented normalization. Neither alternative is approved or implemented here; do not silently normalize stored history as a workaround.
+A selected LF/Unicode example does round-trip, but that cannot justify the PRD's exact-text guarantee for every hook observation.
+
+**Decision:** revise the guarantee to documented normalization. History stores the hook text exactly; restoring it yields that text as Pi's editor normalizes it (tabs to spaces, CR/CRLF to LF). Stored text is never pre-normalized, so a future exact-text API needs no data migration.
 
 ### 2. Existing image attachments
 
@@ -111,7 +113,7 @@ A selected LF/Unicode example does round-trip, but that cannot justify the PRD's
 
 **Runtime scope:** the PTY types a synthetic PNG path into the draft, opens/cancels the picker (path remains), then selects replacement text (path disappears). This proves reference loss for that text representation, **not** loss of every possible attachment route. Real clipboard paste, drag/drop, initial CLI image inputs, mixed text/image submission, and attachment identity remain unverified. The test never touches the user's clipboard and never sends an image to a provider.
 
-Do not promise attached-image preservation. Affected work is stopped. Owner options: seek upstream attachment-preserving text replacement, or explicitly approve a narrower product contract. Parsing/reinserting paths would change the exact replacement text and is **not** implemented or assumed acceptable.
+**Decision:** narrower contract. Selecting a history entry replaces the whole draft, including any attached image; the picker warns before replacing a draft that contains an image. Cancellation still preserves the draft. Parsing/reinserting paths is **not** adopted.
 
 ### 3. Pause for the lifetime of the process
 
@@ -119,7 +121,7 @@ Do not promise attached-image preservation. Affected work is stopped. Owner opti
 
 The reviewed docs explain session-persisted `appendEntry()`, factories/lifecycle hooks, and an inter-extension event bus. They do **not** document a process-lifetime state facility surviving all replacements. Static inspection also shows event-bus subscriptions are removed when an extension runtime is invalidated; leaving a listener alive is not a justified solution. `appendEntry()` would persist to disk and violate the approved pause semantics.
 
-Owner options: request a documented upstream process-state facility; explicitly approve and separately verify a namespaced `globalThis` process-state technique (not an approved documented Pi API here); or revise pause lifetime/persistence requirements. **No `globalThis`, environment-state workaround, disk-backed pause, or changed semantics have been implemented.** The diagnostic log records synthetic outcomes only; it is never read to restore pause.
+**Decision:** approve a namespaced `globalThis` process-state slot, keeping the PRD's pause semantics unchanged. The probe now demonstrates it (see the pause row above) on 0.85.1 and 0.87.1. Risk: this relies on Pi reusing one Node realm for replaced extension runtimes, which Pi does not document; the TUI test is the regression guard and must pass on every supported Pi release. No environment-state workaround or disk-backed pause is used; the diagnostic log records synthetic outcomes only and is never read to restore pause.
 
 ## The actual extension delta
 
@@ -149,4 +151,4 @@ Version-pinned source: [Pi npm gitHead](https://github.com/earendil-works/pi-mon
 - `dist/core/extensions/loader.js`: runtime invalidation/listener cleanup (135-186), module loading (409 onward).
 - `dist/core/extensions/runner.js`: reserved shortcut list and conflict diagnostics; `dist/modes/interactive/components/custom-editor.js`: extension shortcut precedence.
 
-**Before proceeding with the affected MVP slices:** obtain owner decisions on all three blockers. **Before claiming complete compatibility:** run the unverified matrix items, especially the remaining real-TUI/provider streaming/replay paths, real attachments, a compliant pause mechanism, lifecycle races, physical IME/theme/resize checks and wider coexistence. Re-resolve npm stable and repeat against any release newer than 0.87.1 plus each explicitly supported Node version. The static anchors above are for the locked 0.85.1 install unless a line names 0.87.1. A passing spike test run is evidence for these bounded observations only, not release approval.
+Owner decisions on all three blockers are recorded above. **Before claiming complete compatibility:** run the unverified matrix items, especially the remaining real-TUI/provider streaming/replay paths, the image-warning check with real attachments, lifecycle races, physical IME/theme/resize checks and wider coexistence. Re-resolve npm stable and repeat against any release newer than 0.87.1 plus each explicitly supported Node version. The static anchors above are for the locked 0.85.1 install unless a line names 0.87.1. A passing spike test run is evidence for these bounded observations only, not release approval.
