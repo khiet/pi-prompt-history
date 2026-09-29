@@ -66,6 +66,8 @@ export type HostUI = {
 	confirmAnswer: boolean;
 	/** Pickers opened so far, oldest first. */
 	pickers: Picker[];
+	/** Footer statuses by key, as `ui.setStatus()` last left them. */
+	statuses: Map<string, string>;
 };
 
 export type Host = {
@@ -101,6 +103,7 @@ export function loadExtension(): Host {
 		confirms: [],
 		confirmAnswer: true,
 		pickers: [],
+		statuses: new Map(),
 	};
 	const pickerWaiters: ((picker: Picker) => void)[] = [];
 	const record =
@@ -209,6 +212,10 @@ export function loadExtension(): Host {
 					if (options.notifyThrows) throw new Error("notify failed");
 				},
 				custom,
+				setStatus: (key: string, text: string | undefined) => {
+					if (text === undefined) ui.statuses.delete(key);
+					else ui.statuses.set(key, text);
+				},
 				getEditorText: () => ui.draft,
 				setEditorText: (text: string) => {
 					ui.editorWrites.push(text);
@@ -266,6 +273,16 @@ export function loadExtension(): Host {
 				pickerWaiters.push(resolve);
 			}),
 	};
+}
+
+/**
+ * Drops the process-global state, as starting a new Pi process would. Runtimes
+ * loaded in the same test process otherwise share it, as Pi's runtimes do.
+ */
+export function restartProcess(): void {
+	delete (globalThis as Record<symbol, unknown>)[
+		Symbol.for("pi-prompt-history/process-state")
+	];
 }
 
 /** Permission tests are meaningless for root, which bypasses file modes. */

@@ -23,6 +23,25 @@ type WarningKind =
 const IMAGE_PATH = /\.(?:png|jpe?g|gif|webp|bmp)(?=$|[\s'"])/im;
 
 /**
+ * Not a documented Pi API: Pi replaces the extension runtime on reload, new,
+ * resume, and fork, yet keeps the Node process and its `globalThis`, so state
+ * kept here lasts until the process exits. It is never written to disk.
+ * `spike/pause.py` must pass on each supported Pi release to keep relying on it.
+ */
+type ProcessState = { paused: boolean };
+const PROCESS_STATE = Symbol.for("pi-prompt-history/process-state");
+
+function processState(): ProcessState {
+	const slots = globalThis as Record<symbol, ProcessState | undefined>;
+	slots[PROCESS_STATE] ??= { paused: false };
+	return slots[PROCESS_STATE];
+}
+
+const STATUS_KEY = "prompt-history";
+const PAUSED_STATUS = "history paused";
+const USAGE = "Usage: /history, /history pause, or /history resume.";
+
+/**
  * Pi runs this factory once per session runtime: at startup and again after
  * every reload, new, resume, and fork. Each run owns its own store handle and
  * closes it on shutdown, so only the live runtime captures or restores.
@@ -36,6 +55,7 @@ export default function promptHistory(pi: ExtensionAPI): void {
 	// the context that is still live, and nothing touches it afterwards.
 	const inFlight = new Set<Promise<void>>();
 	const lastWarning = new Map<WarningKind, number>();
+	const state = processState();
 
 	// Warnings name the problem and the fix, never the prompt text.
 	const warn = (ctx: ExtensionContext, kind: WarningKind, message: string) => {
@@ -89,7 +109,8 @@ export default function promptHistory(pi: ExtensionAPI): void {
 	pi.on("input", (event, ctx) => {
 		// Capture is best effort: nothing it does may hold up or block the prompt.
 		try {
-			if (live && isEligible(event, ctx)) capture(event.text, ctx);
+			if (live && !state.paused && isEligible(event, ctx))
+				capture(event.text, ctx);
 		} catch (error) {
 			warn(
 				ctx,
@@ -156,10 +177,44 @@ export default function promptHistory(pi: ExtensionAPI): void {
 		}
 	};
 
+	// Best effort, like warnings: failing to show feedback never undoes a state
+	// change that already took effect.
+	const tryUI = (show: () => void) => {
+		try {
+			show();
+		} catch {}
+	};
+
+	// Every new runtime restores the indicator, so a pause is never out of sight.
+	const showPauseStatus = (ctx: ExtensionContext) =>
+		tryUI(() =>
+			ctx.ui.setStatus(STATUS_KEY, state.paused ? PAUSED_STATUS : undefined),
+		);
+
+	const setPaused = (paused: boolean, ctx: ExtensionContext) => {
+		if (!live) return;
+		const changed = state.paused !== paused;
+		state.paused = paused;
+		showPauseStatus(ctx);
+		const message = paused
+			? `Prompt history ${changed ? "paused" : "is already paused"}. New prompts are not recorded until /history resume or Pi restarts. Saved history stays searchable.`
+			: `Prompt history ${changed ? "resumed" : "is already recording"}. New prompts are recorded.`;
+		tryUI(() => ctx.ui.notify(message, "info"));
+	};
+
 	pi.registerCommand("history", {
-		description: "Search recorded prompts and restore one into the editor",
-		handler: (_args, ctx) => openPicker(ctx),
+		description:
+			"Search recorded prompts and restore one into the editor; pause or resume recording",
+		handler: async (args, ctx) => {
+			const action = args.trim();
+			if (action === "") return openPicker(ctx);
+			if (action === "pause" || action === "resume")
+				return setPaused(action === "pause", ctx);
+			if (live) tryUI(() => ctx.ui.notify(USAGE, "warning"));
+		},
 	});
+
+	pi.on("session_start", (_event, ctx) => showPauseStatus(ctx));
 
 	// Read once per runtime, so an edited config applies on /reload or restart
 	// and never rebinds a running one.
