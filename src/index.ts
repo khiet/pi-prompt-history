@@ -14,7 +14,7 @@ import {
 } from "./history.ts";
 import {
 	createPicker,
-	type PickerRemove,
+	type PickerDelete,
 	type PickerSearch,
 } from "./picker.ts";
 
@@ -180,8 +180,7 @@ export default function promptHistory(pi: ExtensionAPI): void {
 			}
 		};
 
-	// A picker left open by a session that shut down deletes nothing.
-	const remove: PickerRemove = async (record) => {
+	const deleteRecord: PickerDelete = async (record) => {
 		if (!live)
 			return {
 				kind: "failed",
@@ -193,7 +192,7 @@ export default function promptHistory(pi: ExtensionAPI): void {
 			historyFile = opened.historyFile;
 			// A record another process already removed counts as deleted.
 			await opened.history.delete(record.id);
-			return { kind: "removed" };
+			return { kind: "deleted" };
 		} catch (error) {
 			return {
 				kind: "failed",
@@ -212,7 +211,7 @@ export default function promptHistory(pi: ExtensionAPI): void {
 					cwd: ctx.cwd,
 					initial,
 					search,
-					remove,
+					delete: deleteRecord,
 					theme,
 					keybindings,
 					requestRender: () => tui.requestRender(),

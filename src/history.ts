@@ -124,9 +124,10 @@ const STALE = "stale";
 /**
  * Performs no I/O until the first record or search.
  *
- * Rewrites (compaction, delete, and clear) replace the file by rename without locking. Another
- * process's append that lands between this process reading the file and
- * renaming over it, or that opened the old file before the rename, is lost.
+ * Rewrites (compaction, delete, and clear) replace the file by rename
+ * without locking. Another process's append that lands between this process
+ * reading the file and renaming over it, or that opened the old file before
+ * the rename, is lost.
  * Appends are one write per line in append mode, which local filesystems
  * keep whole; network filesystems may not.
  */
@@ -201,6 +202,8 @@ export function openHistory(paths: StorePaths): History {
 		return removed;
 	};
 
+	const compact = () => rewrite(() => true, true);
+
 	/** Queues a rewrite behind pending work, as appends are queued. */
 	const queueRewrite = (keep: (record: HistoryRecord) => boolean) => {
 		if (closed) return Promise.reject(new Error("history is closed"));
@@ -233,7 +236,7 @@ export function openHistory(paths: StorePaths): History {
 				loaded.records.push(record);
 				if (loaded.records.length <= COMPACT_ABOVE) return;
 				try {
-					await rewrite(() => true, true);
+					await compact();
 				} catch (error) {
 					throw new CompactionError(error);
 				}

@@ -33,7 +33,7 @@ In the picker, Ctrl+D asks `Delete this prompt?`. `y` deletes the selected recor
 
 `/history clear cwd` clears the current directory's prompts, matched by the exact cwd string like the picker's scope, so other directories and subdirectories keep theirs. `/history clear all` clears every prompt this extension recorded. Bare `/history clear` or any other scope shows usage and clears nothing. Both ask for confirmation, naming the scope and how many prompts it holds; cancelling changes nothing, and an empty scope says there is nothing to clear without asking. Both work only in the TUI.
 
-The count in the confirmation is the count when it was shown. Clearing removes whatever is in scope when it runs, so prompts recorded by other Pi processes while the dialog was open are cleared too, and the notice after it reports the count actually cleared.
+The count in the confirmation is the count when it was shown. Clearing removes whatever is in scope when it runs, so prompts recorded by other Pi processes while the dialog was open are cleared too, and the notice after it reports the count actually cleared. Neither count includes unreadable lines, which `/history clear all` also removes.
 
 - Deleting and clearing affect only this extension's history file. They never change Pi's session files, where the same prompts remain.
 - They rewrite the file (see [Limits](#limits)); this does not guarantee forensic erasure from the disk, filesystem snapshots, or backups.

@@ -27,12 +27,12 @@ export type PickerContent =
 
 export type PickerSearch = (request: SearchRequest) => Promise<PickerContent>;
 
-export type RemoveOutcome =
-	| { kind: "removed" }
+export type DeleteOutcome =
+	| { kind: "deleted" }
 	| { kind: "failed"; guidance: string };
 
 /** Deletes one record from storage; must resolve, reporting failures. */
-export type PickerRemove = (record: HistoryRecord) => Promise<RemoveOutcome>;
+export type PickerDelete = (record: HistoryRecord) => Promise<DeleteOutcome>;
 
 export type PickerOptions = {
 	/** The directory the picker opens scoped to. */
@@ -42,7 +42,7 @@ export type PickerOptions = {
 	/** Must resolve, reporting failures as unavailable content. */
 	search: PickerSearch;
 	/** Runs only after the user confirms deleting the selected record. */
-	remove: PickerRemove;
+	delete: PickerDelete;
 	theme: Theme;
 	keybindings: KeybindingsManager;
 	requestRender(): void;
@@ -147,14 +147,14 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 			});
 	};
 
-	const remove = (record: HistoryRecord) => {
+	const deleteRecord = (record: HistoryRecord) => {
 		const position =
 			content.kind === "records"
 				? content.records.findIndex(({ id }) => id === record.id)
 				: 0;
 		deleting = true;
-		void options.remove(record).then((outcome) => {
-			if (outcome.kind === "removed") return refresh(position);
+		void options.delete(record).then((outcome) => {
+			if (outcome.kind === "deleted") return refresh(position);
 			deleting = false;
 			problem = outcome.guidance;
 			options.requestRender();
@@ -252,7 +252,7 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 			if (askingToDelete) {
 				const record = askingToDelete;
 				askingToDelete = undefined;
-				if (data === "y" || data === "Y") remove(record);
+				if (data === "y" || data === "Y") deleteRecord(record);
 				options.requestRender();
 				return;
 			}
