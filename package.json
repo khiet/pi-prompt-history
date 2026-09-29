@@ -6,7 +6,7 @@
 	"keywords": [
 		"pi-package"
 	],
-	"license": "UNLICENSED",
+	"license": "MIT",
 	"type": "module",
 	"files": [
 		"src/index.ts",

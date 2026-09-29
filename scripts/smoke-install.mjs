@@ -54,7 +54,7 @@ try {
 	]);
 	assert.deepEqual(
 		walk(installed).sort(),
-		["README.md", "package.json", ...manifest.files].sort(),
+		["LICENSE", "README.md", "package.json", ...manifest.files].sort(),
 		"unpacked files differ from the allowlist",
 	);
 
