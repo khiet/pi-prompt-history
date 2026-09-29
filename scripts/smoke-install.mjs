@@ -91,10 +91,8 @@ try {
 		app,
 		"node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
 	);
-	// The documented route: `pi install` adds the package to Pi's settings.
-	await run(process.execPath, [cli, "install", installed], { cwd: app, env });
 	// A load failure makes Pi exit non-zero, which fails the run.
-	const pi = (args, input = "") =>
+	const pi = (args, { agentDir = agent, input = "" } = {}) =>
 		run(
 			process.execPath,
 			[
@@ -104,15 +102,17 @@ try {
 				"--no-skills",
 				"--no-prompt-templates",
 				"--no-themes",
-				"-e",
-				join(repo, "spike/driver.ts"),
 				...args,
 			],
-			{ cwd: app, env, input },
+			{ cwd: app, env: { ...env, PI_CODING_AGENT_DIR: agentDir }, input },
 		);
-
 	const rpc = (command) => `${JSON.stringify({ id: "1", ...command })}\n`;
-	const responses = (await pi(["--mode", "rpc"], rpc({ type: "get_commands" })))
+
+	// The documented route: `pi install` adds the package to Pi's settings.
+	await run(process.execPath, [cli, "install", installed], { cwd: app, env });
+	const responses = (
+		await pi(["--mode", "rpc"], { input: rpc({ type: "get_commands" }) })
+	)
 		.split("\n")
 		.filter((line) => line.startsWith("{"))
 		.map((line) => JSON.parse(line));
@@ -126,9 +126,22 @@ try {
 	);
 	assert.equal(history.sourceInfo.origin, "package");
 
-	await pi(["-p", "print prompt"]);
-	await pi(["--mode", "json", "json prompt"]);
-	await pi(["--mode", "rpc"], rpc({ type: "prompt", message: "rpc prompt" }));
+	// Pi loads `-e` extensions before installed packages, and the driver
+	// swallows input, so the frontends use a separate agent directory where
+	// both come from `-e`, in order: the extension's hook runs first, as
+	// spike/pause.py shows by recording before the same driver swallows.
+	const bare = join(home, "bare-agent");
+	const frontend = (args, input) =>
+		pi(["-e", installed, "-e", join(repo, "spike/driver.ts"), ...args], {
+			agentDir: bare,
+			input,
+		});
+	await frontend(["-p", "print prompt"]);
+	await frontend(["--mode", "json", "json prompt"]);
+	await frontend(
+		["--mode", "rpc"],
+		rpc({ type: "prompt", message: "rpc prompt" }),
+	);
 	const inputs = readFileSync(driverLog, "utf8")
 		.trim()
 		.split("\n")
@@ -140,10 +153,11 @@ try {
 		"json prompt/interactive/json",
 		"rpc prompt/rpc/rpc",
 	]);
-	assert.ok(
-		!existsSync(join(agent, "prompt-history")),
-		"a non-TUI frontend touched the history store",
-	);
+	for (const dir of [agent, bare])
+		assert.ok(
+			!existsSync(join(dir, "prompt-history")),
+			"a non-TUI frontend touched the history store",
+		);
 
 	console.log(
 		`Install smoke OK: Pi ${version}, Node ${process.version}, ${filename}`,
