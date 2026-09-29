@@ -105,11 +105,11 @@ One JSON object per line, appended with one write per record:
 
 These are fixed, not configurable:
 
-- **Retention:** the newest 10,000 records, by the search order (newest `ts` first, then `id`). Appends stay cheap: only when an append takes the count past 11,000 does the extension rewrite the file down to the newest 10,000. Unreadable lines are dropped by that rewrite.
+- **Retention:** the newest 10,000 records, by the search order (newest `ts` first, then `id`). Appends stay cheap: each Pi process counts the records it last loaded plus its own appends, and only when an append takes that count past 11,000 does it rewrite the file down to the newest 10,000. Other processes' appends join the count when this process next searches, so with several writers the file can briefly grow past 11,000. Unreadable lines are dropped by that rewrite.
 - **Results:** at most the newest 100 matches per search, over every retained record.
 - **Prompt size:** 32,768 UTF-8 bytes; larger prompts are skipped.
 
-A rewrite writes a private (`0600`) temporary file in the same directory and renames it over the history file. If preparing it fails, the temporary file is removed, the original stays as it was, and a warning names the directory and error code; the next append past the threshold tries again. An unreadable history file is never rewritten.
+A rewrite writes a private (`0600`) temporary file in the same directory and renames it over the history file. If preparing it fails, the temporary file is removed, the original stays as it was, and a warning names the file, its directory, and the error code; the next append past the threshold tries again. An unreadable history file is never rewritten.
 
 ## Several Pi processes
 

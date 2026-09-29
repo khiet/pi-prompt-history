@@ -117,7 +117,7 @@ export default function promptHistory(pi: ExtensionAPI): void {
 						? warn(
 								ctx,
 								"trim-failed",
-								`Prompt history saved the prompt but could not trim ${historyFile} to the newest ${MAX_RECORDS} (${errorCode(error)}). Check that ${dirname(historyFile)} is writable; the file was not changed. Prompting is unaffected.`,
+								`Prompt history saved the prompt but could not trim ${historyFile} to the newest ${MAX_RECORDS} (${errorCode(error)}). Check that the file is readable and ${dirname(historyFile)} is writable; the file was not changed. Prompting is unaffected.`,
 							)
 						: warn(
 								ctx,

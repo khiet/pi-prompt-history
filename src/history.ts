@@ -97,9 +97,12 @@ type Snapshot = {
 	records: HistoryRecord[];
 	/** Lines that were not blank and could not be read as a record. */
 	malformed: number;
-	/** Undefined when the file did not exist. */
+	/** Undefined when the file did not exist; STALE forces the next reload. */
 	stamp: string | undefined;
 };
+
+/** Never equals a real file stamp. */
+const STALE = "stale";
 
 /**
  * Performs no I/O until the first record or search.
@@ -114,8 +117,8 @@ export function openHistory(paths: StorePaths): History {
 	let closed = false;
 	let directoryReady = false;
 	let loaded: Snapshot | undefined;
-	// Appends and rewrites run one at a time so lines land in submission order
-	// and a rewrite never races this process's own appends.
+	// Appends, rewrites, and loads run one at a time so lines land in
+	// submission order and a load never races a rewrite in this process.
 	let pending: Promise<unknown> = Promise.resolve();
 
 	const append = async (line: string) => {
@@ -164,7 +167,8 @@ export function openHistory(paths: StorePaths): History {
 			await rm(temp, { force: true }).catch(() => {});
 			throw error;
 		}
-		loaded = undefined;
+		// Keeps the count so the next append stays cheap; the next search reloads.
+		loaded = { records: kept, malformed: 0, stamp: STALE };
 	};
 
 	return {
@@ -202,8 +206,9 @@ export function openHistory(paths: StorePaths): History {
 		},
 
 		async search({ query, cwd }) {
-			await pending;
-			const { records, malformed } = await refresh();
+			const read = pending.then(refresh);
+			pending = read.catch(() => {});
+			const { records, malformed } = await read;
 			const needle = query.toLowerCase();
 			const matches = records
 				.filter(
