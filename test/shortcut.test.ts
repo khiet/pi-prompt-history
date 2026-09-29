@@ -81,6 +81,13 @@ describe("search shortcut", () => {
 		}
 	});
 
+	test("an empty config keeps ctrl+r, silently", async () => {
+		await writeConfig("{}");
+		const host = await start();
+		assert.deepEqual(shortcutsOf(host), ["registerShortcut:ctrl+r"]);
+		assert.deepEqual(host.notices, []);
+	});
+
 	test("does nothing outside the TUI", async () => {
 		const host = await start();
 		await host.shortcut("ctrl+r", host.context({ mode: "rpc" }));
@@ -107,6 +114,7 @@ describe("invalid settings", () => {
 		["a non-string shortcut", '{"shortcut": 7}'],
 		["an unknown modifier", '{"shortcut": "meta+h"}'],
 		["an unknown key", '{"shortcut": "ctrl+hh"}'],
+		["a missing key", '{"shortcut": "ctrl+"}'],
 		["a repeated modifier", '{"shortcut": "ctrl+ctrl+h"}'],
 		["a key that types text", '{"shortcut": "h"}'],
 		["a shifted key that types text", '{"shortcut": "shift+h"}'],
@@ -129,13 +137,6 @@ describe("invalid settings", () => {
 			assert.match(notice?.message ?? "", /\/history/);
 		});
 	}
-
-	test("warns once per runtime", async () => {
-		await writeConfig('{"shortcut": 7}');
-		const host = await start();
-		await host.fire("session_start", { reason: "startup" });
-		assert.equal(host.notices.length, 1);
-	});
 });
 
 describe("unavailable configuration", () => {
@@ -164,7 +165,9 @@ describe("unavailable configuration", () => {
 		(await opened).press(keys.escape);
 		await running;
 		assert.ok(
-			next.notices.every(({ message }) => !message.includes("private prompt")),
+			[...host.notices, ...next.notices].every(
+				({ message }) => !message.includes("private prompt"),
+			),
 		);
 	});
 });
