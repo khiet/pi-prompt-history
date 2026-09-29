@@ -23,15 +23,14 @@ type WarningKind =
 const IMAGE_PATH = /\.(?:png|jpe?g|gif|webp|bmp)(?=$|[\s'"])/im;
 
 /**
- * Owner-approved, but not a documented Pi API: Pi replaces the extension
- * runtime on reload, new, resume, and fork, yet keeps the Node process and its
- * `globalThis`, so state kept here lasts until the process exits. It is never
- * written to disk. A real-TUI check (`spike/pause.py`) gates each Pi release.
+ * Not a documented Pi API: Pi replaces the extension runtime on reload, new,
+ * resume, and fork, yet keeps the Node process and its `globalThis`, so state
+ * kept here lasts until the process exits. It is never written to disk.
+ * `spike/pause.py` must pass on each supported Pi release to keep relying on it.
  */
 type ProcessState = { paused: boolean };
 const PROCESS_STATE = Symbol.for("pi-prompt-history/process-state");
 
-/** Looked up on each factory run, so a process without the slot starts unpaused. */
 function processState(): ProcessState {
 	const slots = globalThis as Record<symbol, ProcessState | undefined>;
 	slots[PROCESS_STATE] ??= { paused: false };
@@ -178,8 +177,8 @@ export default function promptHistory(pi: ExtensionAPI): void {
 		}
 	};
 
-	// UI feedback for pause is best effort, like warnings: a failure to show it
-	// never undoes a state change that already took effect.
+	// Best effort, like warnings: failing to show feedback never undoes a state
+	// change that already took effect.
 	const tryUI = (show: () => void) => {
 		try {
 			show();

@@ -212,7 +212,7 @@ def run(root):
     finally:
         pi.close()
 
-    # A new process starts recording again, with no status and nothing on disk.
+    # The store holds only history; a new process records again, with no status.
     files = sorted(p.name for p in (root / "agent/prompt-history").iterdir())
     assert files == ["history.jsonl"], files
     pi = Pi(root)
