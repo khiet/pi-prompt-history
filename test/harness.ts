@@ -24,6 +24,10 @@ export type ContextOptions = {
 	sessionId?: string;
 	/** Session entries a resumed or forked session would already contain. */
 	entries?: unknown[];
+	/** Session accessors throw, as a context from a replaced runtime can. */
+	stale?: boolean;
+	/** `ui.notify` records the notice and then throws. */
+	notifyThrows?: boolean;
 };
 
 export type Host = {
@@ -59,25 +63,35 @@ export function loadExtension(): Host {
 		},
 	) as ExtensionAPI;
 
-	const context = (options: ContextOptions = {}): ExtensionContext =>
-		({
+	const context = (options: ContextOptions = {}): ExtensionContext => {
+		const live =
+			<T>(value: () => T) =>
+			() => {
+				if (options.stale) throw new Error("stale extension context");
+				return value();
+			};
+		return {
 			mode: options.mode ?? "tui",
 			cwd: options.cwd ?? "/work/project",
 			hasUI: true,
 			sessionManager: {
-				getSessionFile: () =>
+				getSessionFile: live(() =>
 					"sessionFile" in options
 						? options.sessionFile
 						: "/sessions/one.jsonl",
-				getSessionId: () => options.sessionId ?? "session-one",
+				),
+				getSessionId: live(() => options.sessionId ?? "session-one"),
 				getEntries: () => options.entries ?? [],
 				getBranch: () => options.entries ?? [],
 			},
 			ui: {
-				notify: (message: string, type?: string) =>
-					notices.push({ message, type }),
+				notify: (message: string, type?: string) => {
+					notices.push({ message, type });
+					if (options.notifyThrows) throw new Error("notify failed");
+				},
 			},
-		}) as unknown as ExtensionContext;
+		} as unknown as ExtensionContext;
+	};
 
 	const fire = async (name: string, event: unknown, ctx: ExtensionContext) => {
 		let result: unknown;

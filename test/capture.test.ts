@@ -224,6 +224,32 @@ describe("storage", () => {
 		assert.match(host.notices[0]?.message ?? "", /EACCES/);
 		assert.equal(await readFile(store.historyFile, "utf8"), "existing line\n");
 	});
+
+	test("a capture that throws before writing still continues", async () => {
+		const result = await host.input(
+			{ text: "late prompt" },
+			host.context({ stale: true }),
+		);
+		await host.shutdown();
+
+		assert.deepEqual(result, { action: "continue" });
+		assert.equal(host.notices.length, 1);
+		assert.equal(host.notices[0]?.message.includes("late prompt"), false);
+		assert.equal(await exists(store.historyFile), false);
+	});
+
+	test("a failing warning does not break capture or shutdown", async () => {
+		await mkdir(store.historyFile, { recursive: true });
+
+		const result = await host.input(
+			{ text: "prompt" },
+			host.context({ notifyThrows: true }),
+		);
+
+		assert.deepEqual(result, { action: "continue" });
+		await host.shutdown();
+		assert.equal(host.notices.length, 1);
+	});
 });
 
 describe("lifecycle", () => {
