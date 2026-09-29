@@ -41,6 +41,8 @@ export type SearchResult = {
 	records: HistoryRecord[];
 	/** More records matched than were returned. */
 	capped: boolean;
+	/** Every record that matched, returned or not. */
+	total: number;
 	/** Lines in the file that were skipped because they are not records. */
 	malformed: number;
 };
@@ -66,7 +68,22 @@ export type History = {
 	 * never recreates or rewrites it.
 	 */
 	search(request: SearchRequest): Promise<SearchResult>;
-	/** Waits for pending appends; later records are refused. Safe to call twice. */
+	/**
+	 * Removes the one record with this id, leaving other submissions of the
+	 * same text. Resolves false, without rewriting, when no record has it.
+	 */
+	delete(id: string): Promise<boolean>;
+	/**
+	 * Removes every record in scope (every directory when `cwd` is omitted)
+	 * and resolves with how many. Scope and count are decided when the rewrite
+	 * reads the file, so records appended after an earlier search are cleared
+	 * and counted too. Like every rewrite, it also drops malformed lines.
+	 */
+	clear(scope: Pick<SearchRequest, "cwd">): Promise<number>;
+	/**
+	 * Waits for pending work; later records are refused, and later deletions
+	 * reject. Safe to call twice.
+	 */
 	close(): Promise<void>;
 };
 
@@ -107,9 +124,10 @@ const STALE = "stale";
 /**
  * Performs no I/O until the first record or search.
  *
- * Rewrites (compaction) replace the file by rename without locking. Another
- * process's append that lands between this process reading the file and
- * renaming over it, or that opened the old file before the rename, is lost.
+ * Rewrites (compaction, delete, and clear) replace the file by rename
+ * without locking. Another process's append that lands between this process
+ * reading the file and renaming over it, or that opened the old file before
+ * the rename, is lost.
  * Appends are one write per line in append mode, which local filesystems
  * keep whole; network filesystems may not.
  */
@@ -147,10 +165,22 @@ export function openHistory(paths: StorePaths): History {
 		}
 	};
 
-	const compact = async () => {
+	/**
+	 * Keeps the newest MAX_RECORDS records that `keep` accepts, and resolves
+	 * with how many records `keep` rejected. Skips the rewrite when it rejects
+	 * none, unless `always`. Rejects, leaving the file as it was, when it cannot
+	 * be read or replaced.
+	 */
+	const rewrite = async (
+		keep: (record: HistoryRecord) => boolean,
+		always = false,
+	): Promise<number> => {
 		// Reads afresh so records other processes appended are kept too.
 		const { records } = await refresh();
-		const kept = [...records].sort(newestFirst).slice(0, MAX_RECORDS);
+		const retained = records.filter(keep);
+		const removed = records.length - retained.length;
+		if (removed === 0 && !always) return 0;
+		const kept = retained.sort(newestFirst).slice(0, MAX_RECORDS);
 		const temp = join(
 			paths.dir,
 			`.${basename(paths.historyFile)}.${randomUUID()}.tmp`,
@@ -169,6 +199,17 @@ export function openHistory(paths: StorePaths): History {
 		}
 		// Keeps the count so the next append stays cheap; the next search reloads.
 		loaded = { records: kept, malformed: 0, stamp: STALE };
+		return removed;
+	};
+
+	const compact = () => rewrite(() => true, true);
+
+	/** Queues a rewrite behind pending work, as appends are queued. */
+	const queueRewrite = (keep: (record: HistoryRecord) => boolean) => {
+		if (closed) return Promise.reject(new Error("history is closed"));
+		const run = pending.then(() => rewrite(keep));
+		pending = run.catch(() => {});
+		return run;
 	};
 
 	return {
@@ -220,8 +261,17 @@ export function openHistory(paths: StorePaths): History {
 			return {
 				records: matches.slice(0, MAX_RESULTS),
 				capped: matches.length > MAX_RESULTS,
+				total: matches.length,
 				malformed,
 			};
+		},
+
+		async delete(id) {
+			return (await queueRewrite((record) => record.id !== id)) > 0;
+		},
+
+		clear({ cwd }) {
+			return queueRewrite((record) => cwd !== undefined && record.cwd !== cwd);
 		},
 
 		async close() {

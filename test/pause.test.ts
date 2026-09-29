@@ -161,7 +161,8 @@ describe("pause and resume", () => {
 		assert.equal(status(), undefined);
 		assert.deepEqual(host.notices, [
 			{
-				message: "Usage: /history, /history pause, or /history resume.",
+				message:
+					"Usage: /history, /history pause, /history resume, /history clear cwd, or /history clear all.",
 				type: "warning",
 			},
 		]);

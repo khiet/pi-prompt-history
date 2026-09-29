@@ -38,6 +38,7 @@ export const keys = {
 	enter: "\r",
 	escape: "\x1b",
 	tab: "\t",
+	ctrlD: "\x04",
 };
 
 export type ContextOptions = {
@@ -64,6 +65,8 @@ export type HostUI = {
 	confirms: { title: string; message: string }[];
 	/** What the next confirmation dialogs answer. */
 	confirmAnswer: boolean;
+	/** Runs while a confirmation dialog is open, before it answers. */
+	whileConfirming: (() => Promise<void> | void) | undefined;
 	/** Pickers opened so far, oldest first. */
 	pickers: Picker[];
 	/** Footer statuses by key, as `ui.setStatus()` last left them. */
@@ -102,6 +105,7 @@ export function loadExtension(): Host {
 		editorWrites: [],
 		confirms: [],
 		confirmAnswer: true,
+		whileConfirming: undefined,
 		pickers: [],
 		statuses: new Map(),
 	};
@@ -223,6 +227,7 @@ export function loadExtension(): Host {
 				},
 				confirm: async (title: string, message: string) => {
 					ui.confirms.push({ title, message });
+					await ui.whileConfirming?.();
 					return ui.confirmAnswer;
 				},
 			},
