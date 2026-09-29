@@ -4,22 +4,22 @@
 
 This repository records the bounded investigation for [issue #2](https://github.com/khiet/pi-prompt-history/issues/2), against the guarantees in [the parent PRD](https://github.com/khiet/pi-prompt-history/issues/1). No prompt store, MVP, or release is implemented.
 
-**Result: blocked guarantees and incomplete verification.** Several public integration seams work, but exact arbitrary-text restoration fails, image-path replacement loses the draft reference, and factory-local pause does not survive runtime replacement. No guarantee has been relaxed. Issue #2 should not be marked fully verified.
+**Result: blocked guarantees and incomplete verification.** Several public integration seams work, but exact arbitrary-text restoration fails, image-path replacement loses the draft reference, and factory-local pause does not survive runtime replacement. No guarantee has been relaxed. Re-run on 2026-09-29 against the minimum (0.85.1) and the newer current stable (0.87.1): all three blockers reproduce on both, and one queue-helper behavior changed in 0.86.0 (see [Version delta](#version-delta-0851-to-0871)). Issue #2 should not be marked fully verified.
 
 ## Tested environment
 
-Reproduced from a fresh locked install and extended on **2026-09-09 (UTC)**, following the owner's approval to extend verification without changing guarantees. Issues #1 and #2 were re-read through GitHub's read-only API; neither issue was modified.
+First reproduced and extended on **2026-09-09 (UTC)**, following the owner's approval to extend verification without changing guarantees. Re-run on **2026-09-29 (UTC)** from fresh installs of both targets below.
 
 | Target | Resolved/tested version | Evidence |
 | --- | --- | --- |
-| Minimum Pi | `@earendil-works/pi-coding-agent@0.85.1` | Fresh locked npm install; SDK and real CLI/TUI probes |
-| Current npm stable | `0.85.1` | `npm view @earendil-works/pi-coding-agent@latest version dist-tags.latest gitHead engines --json` returned version/latest `0.85.1` |
+| Minimum Pi | `@earendil-works/pi-coding-agent@0.85.1` | Fresh locked npm install (`npm ci`); SDK and real CLI/TUI probes |
+| Current npm stable | `0.87.1` (published 2026-09-22) | `npm view @earendil-works/pi-coding-agent@latest version dist-tags.latest --json` returned `0.87.1` on 2026-09-29; exact-pinned install over the lockfile; SDK and real CLI/TUI probes |
 | Node | **22.22.0** | All probes; no other Node version tested |
-| Pi TUI / agent-core / AI | `0.85.1` each | Dependencies from the installed Pi package; public AI stream utility also pinned as explicit test tooling |
+| Pi TUI / agent-core / AI | `0.85.1` or `0.87.1` each, matching the Pi under test | Dependencies from the installed Pi package; public AI stream utility also pinned as explicit test tooling |
 | Platform | macOS **26.6.2**, build **25G83**, arm64 | POSIX PTY, `TERM=xterm-256color`, regular TUI |
 | Probe tooling | npm **10.9.4**, Python **3.12.13**, Biome **2.4.8**, Ruff **0.15.14** | Lint/format and tests |
 
-Minimum and latest resolve to **one identical release**, not two independent compatibility tests. npm reports Pi's Node engine as `>=22.19.0`; that is an upstream requirement, **not** evidence that this spike tested all those versions. No release support range is declared here. Pi's npm `gitHead` was `d981de1229ef899957bbe968bc8dcda02a21f477`.
+Minimum and current stable are now **two distinct releases**, each tested independently; intermediate releases (0.86.0, 0.86.1, 0.87.0) were not. npm reports Pi's Node engine as `>=22.19.0` for both; that is an upstream requirement, **not** evidence that this spike tested all those versions. No release support range is declared here. Pi's npm `gitHead` was `d981de1229ef899957bbe968bc8dcda02a21f477` for 0.85.1 and `f07218c4d4bbc12bef056a7058c3dd49dfe41abe` for 0.87.1.
 
 ## Reproduce
 
@@ -29,6 +29,10 @@ Requires Node and npm, plus Python 3 on a POSIX system with PTYs. No API key or 
 npm ci --ignore-scripts
 npm run lint:fix
 npm test
+# Current stable: repeat against 0.87.1 without changing the lockfile
+npm install --no-save --ignore-scripts --save-exact @earendil-works/pi-coding-agent@0.87.1 @earendil-works/pi-ai@0.87.1
+npm test
+npm ci --ignore-scripts  # restore the locked minimum
 # Python lint/format, if Ruff is installed (tested with 0.15.14):
 ruff check --fix spike/tui.py
 ruff format spike/tui.py
@@ -43,7 +47,7 @@ The private package and lockfile are **test tooling**, not a Pi package manifest
 
 **Do not install the probe in your normal Pi environment. It consumes prompts and logs synthetic text.** The runners do not copy credentials, use the real clipboard, alter user keybindings/settings, or discover user extensions/context files. Environment variables are allowlisted and startup networking is disabled. Only the streaming SDK probe runs agent turns, exclusively through its registered in-process script, using a dummy non-secret auth value and no HTTP client. TUI prompts are still consumed before agent turns. Synthetic keybinding fixtures are written only inside temporary agent directories. Tests remove successful temporary runs; a failed TUI run retains only its synthetic diagnostic files and prints their location. The scripts do not use Pi private fields or patch internals. Static source inspection below is separate from runtime testing.
 
-Expected result: one `SDK PASS`, one `SDK STREAM PASS` and two `TUI PASS` lines, with exit status 0. Negative compatibility results are deliberate assertions, not test failures. Fresh `npm ci --ignore-scripts`, Biome auto-fix, Ruff check/format, and the full suite passed on the recorded environment. The explicit AI devDependency supports its public ESM import; this remains private test tooling, not extension packaging.
+Expected result per Pi version: one `SDK PASS`, one `SDK STREAM PASS` (naming the Pi version) and two `TUI PASS` lines, with exit status 0. The streaming probe branches on Pi's exported `VERSION` for the one behavior that differs between tested releases. Negative compatibility results are deliberate assertions, not test failures. Fresh `npm ci --ignore-scripts`, Biome auto-fix, Ruff check/format, and the full suite passed on the recorded environment. The explicit AI devDependency supports its public ESM import; this remains private test tooling, not extension packaging.
 
 ## Findings by acceptance area
 
@@ -59,7 +63,7 @@ Expected result: one `SDK PASS`, one `SDK STREAM PASS` and two `TUI PASS` lines,
 | Commands bypass hook | **D + SDK + TUI:** registered commands execute without an input observation, including **SDK** execution while a scripted stream is held open. Pi's own interactive commands are also outside the general prompt path. Do not advertise complete slash-command history. |
 | Non-TUI / extension origin | **D + SDK:** all nine combinations of print/json/rpc mode bindings and interactive/rpc/extension sources are rejected by the eligibility predicate. These are SDK bindings, not real RPC/print/JSON frontend tests. **TUI:** `pi.sendUserMessage()` reaches the hook with source `extension` and is excluded. |
 | Ephemeral sessions | **D + SDK + TUI:** `getSessionFile()` is undefined with `SessionManager.inMemory()` and real `--no-session`; ephemeral input is excluded. A new persistent session already has a file path before messages are written, so file existence is not the right test. |
-| Steering, follow-up, replay | **D + SDK:** while a scripted text stream is held open, `prompt()` emits interactive `steer`/`followUp` input before queueing. Both deliver in order without another input event. `clearQueue()` emits no input; explicit resubmission emits a second observation, while only one copy is delivered. Direct SDK `steer()`/`followUp()` helpers bypass the input hook entirely. A scripted rate-limit failure retries once; a scripted overflow compacts using an extension-provided summary and continues once. Each recovery makes two provider calls but only one input observation. **Unverified:** real-TUI streaming/dequeue keystrokes, tool-boundary steering, actual providers, threshold/between-tool compaction, aborted/exhausted retries and broader replay paths. See the bounded matrix below. |
+| Steering, follow-up, replay | **D + SDK:** while a scripted text stream is held open, `prompt()` emits interactive `steer`/`followUp` input before queueing. Both deliver in order without another input event. `clearQueue()` emits no input; explicit resubmission emits a second observation, while only one copy is delivered. Direct SDK `steer()`/`followUp()` helpers bypass the input hook on 0.85.1; on 0.87.1 each emits exactly one eligible `interactive` observation with its `streamingBehavior` (see [Version delta](#version-delta-0851-to-0871)). A scripted rate-limit failure retries once; a scripted overflow compacts using an extension-provided summary and continues once. Each recovery makes two provider calls but only one input observation. **Unverified:** real-TUI streaming/dequeue keystrokes, tool-boundary steering, actual providers, threshold/between-tool compaction, aborted/exhausted retries and broader replay paths. See the bounded matrix below. |
 | Session transitions / backfill | **D + TUI:** reload, new, resume and fork issue shutdown then a fresh factory's start with corresponding reasons. No input observations occur from restoring the synthetic session. A recorder need not read/backfill session entries. The fixture reads the branch only to choose an entry for the fork test, not for capture. |
 | Ctrl+R | **TUI:** with the default editor focused, extension shortcut opens the picker, not rename. Pi emits its built-in conflict warning. With synthetic `app.clear: "ctrl+r"` configuration, Pi warns and skips the extension shortcut: Ctrl+R clears a nonempty draft without opening, renaming or submitting. `/history` still works, as does configured Alt+H in another run with the same reserved binding. Ownership is conditional on keybindings and editor compatibility. |
 | Alternative shortcut / command | **TUI:** `/history` opens; a separately configured `alt+h` opens alongside Pi's bundled `modal-editor.ts` example. The fixture's environment selector is test configuration, not MVP config implementation. |
@@ -79,11 +83,19 @@ Expected result: one `SDK PASS`, one `SDK STREAM PASS` and two `TUI PASS` lines,
 | Idle seed, transformed steer, template follow-up | 3 | Exact observed fields; transformed/expanded queue text; successive provider contexts contain seed, then steer, then follow-up; no input on queue delivery; command executes during streaming without capture |
 | Skill invocation | 1 | Raw hook text, expanded skill content and argument in provider context |
 | Clear queues and explicitly resubmit | 2 | Both queues returned/cleared; no input from clearing; resubmitted text has two hook observations but one delivered user message; discarded follow-up never delivers |
-| Direct SDK queue helpers | 3 | `steer()` and `followUp()` deliver but do not emit input; callers needing observation must not treat these helpers as equivalent to `prompt()` |
+| Direct SDK queue helpers | 3 | 0.85.1: `steer()` and `followUp()` deliver but do not emit input. 0.87.1: each emits one input observation (`source: "interactive"`, matching `streamingBehavior`, eligible) and delivery adds none |
 | Rate-limit recovery | 2 | One `auto_retry_start`, successful `auto_retry_end`, unchanged user text across attempts, one input observation |
 | Overflow recovery | 2 | One `session_before_compact` with `reason: "overflow"` and `willRetry: true`; replacement context contains synthetic summary and pending prompt; successful continuation, one input observation |
 
 These are assertions about **hook observations**, not a guarantee that each observation is delivered: cleared input remains observed and an explicit resubmission is another observation. The script does not test HTTP serialization, server retries, inference, real steering/follow-up keystrokes, tools, or every compaction/retry path. It does not establish eligibility of an actual frontend merely by binding SDK mode to `tui`. No replay-induced duplicates occurred in these two recovery scenarios; the broader release gate remains open.
+
+## Version delta: 0.85.1 to 0.87.1
+
+**Changed (D + S + SDK):** Pi 0.86.0's changelog reports "Fixed direct RPC `steer` and `follow_up` commands bypassing extension `input` handlers (#8718)". In 0.87.1, `AgentSession.steer()`/`followUp()` route through input handlers with `source` defaulting to `"interactive"` (`dist/core/agent-session.js` 1415-1428); RPC mode passes `source: "rpc"`. The SDK probe confirms one observation per helper call and none on delivery.
+
+**Impact (S):** the TUI queues prompts typed during compaction without running input handlers (`queueCompactionMessage`, `dist/modes/interactive/interactive-mode.js` 3781), then flushes the first through `prompt()` and the rest through `steer()`/`followUp()` (3809-3858). On 0.85.1 those later prompts are never observed, a missed-capture gap; on 0.87.1 each is observed once, eligible. Neither version double-captures them. This path is static-only; a real-TUI compaction queue remains unverified. A recorder must also not assume every eligible observation came from the editor: other extensions calling the SDK helpers without a `source` look like typed input.
+
+**Unchanged:** every other SDK and TUI assertion, including all three blocker reproductions, passes identically on both releases. Static checks of 0.87.1 find no documented draft-attachment API or process-lifetime state facility in the extension docs or `ExtensionUIContext` types (`setEditorText`/`getEditorText` only), and `pi-tui`'s editor `setText` still calls `normalizeText`.
 
 ## Blocked guarantees - owner decisions required
 
@@ -95,7 +107,7 @@ A selected LF/Unicode example does round-trip, but that cannot justify the PRD's
 
 ### 2. Existing image attachments
 
-**Static finding:** Pi 0.85.1's clipboard handler writes the image into a temporary file and inserts its file path into editor text. `setEditorText()` simply calls `editor.setText()`. There is no documented separate draft-attachment get/set/preserve facility in the reviewed extension API.
+**Static finding:** Pi 0.85.1's clipboard handler (unchanged in substance on 0.87.1) writes the image into a temporary file and inserts its file path into editor text. `setEditorText()` simply calls `editor.setText()`. There is no documented separate draft-attachment get/set/preserve facility in the reviewed extension API.
 
 **Runtime scope:** the PTY types a synthetic PNG path into the draft, opens/cancels the picker (path remains), then selects replacement text (path disappears). This proves reference loss for that text representation, **not** loss of every possible attachment route. Real clipboard paste, drag/drop, initial CLI image inputs, mixed text/image submission, and attachment identity remain unverified. The test never touches the user's clipboard and never sends an image to a provider.
 
@@ -131,10 +143,10 @@ Reviewed completely: Pi's README, `docs/extensions.md`, `docs/tui.md`, `docs/sdk
 
 Version-pinned source: [Pi npm gitHead](https://github.com/earendil-works/pi-mono/tree/d981de1229ef899957bbe968bc8dcda02a21f477). Reproducible static anchors under `node_modules/@earendil-works/pi-coding-agent/`:
 
-- `dist/modes/interactive/interactive-mode.js`: `setEditorText` (1920), clipboard path insertion (2334–2346), submit trim (2361 onward), session-message `populateHistory` (2971–2972).
-- `node_modules/@earendil-works/pi-tui/dist/components/editor.js`: `setText` (917), `normalizeText` (949–950).
-- `dist/core/agent-session.js`: `prompt` (821–874), queue helpers (`_queueSteer`, `_queueFollowUp`), `_runAgentPrompt` (772 onward).
-- `dist/core/extensions/loader.js`: runtime invalidation/listener cleanup (135–186), module loading (409 onward).
+- `dist/modes/interactive/interactive-mode.js`: `setEditorText` (1920), clipboard path insertion (2334-2346), submit trim (2361 onward), session-message `populateHistory` (2971-2972).
+- `node_modules/@earendil-works/pi-tui/dist/components/editor.js`: `setText` (917), `normalizeText` (949-950).
+- `dist/core/agent-session.js`: `prompt` (821-874), queue helpers (`_queueSteer`, `_queueFollowUp`), `_runAgentPrompt` (772 onward).
+- `dist/core/extensions/loader.js`: runtime invalidation/listener cleanup (135-186), module loading (409 onward).
 - `dist/core/extensions/runner.js`: reserved shortcut list and conflict diagnostics; `dist/modes/interactive/components/custom-editor.js`: extension shortcut precedence.
 
-**Before proceeding with the affected MVP slices:** obtain owner decisions on all three blockers. **Before claiming complete compatibility:** run the unverified matrix items, especially the remaining real-TUI/provider streaming/replay paths, real attachments, a compliant pause mechanism, lifecycle races, physical IME/theme/resize checks and wider coexistence. Re-resolve npm stable and repeat against any newer release plus each explicitly supported Node version. A passing spike test run is evidence for these bounded observations only, not release approval.
+**Before proceeding with the affected MVP slices:** obtain owner decisions on all three blockers. **Before claiming complete compatibility:** run the unverified matrix items, especially the remaining real-TUI/provider streaming/replay paths, real attachments, a compliant pause mechanism, lifecycle races, physical IME/theme/resize checks and wider coexistence. Re-resolve npm stable and repeat against any release newer than 0.87.1 plus each explicitly supported Node version. The static anchors above are for the locked 0.85.1 install unless a line names 0.87.1. A passing spike test run is evidence for these bounded observations only, not release approval.

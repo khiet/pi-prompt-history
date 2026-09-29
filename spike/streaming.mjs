@@ -11,6 +11,7 @@ export async function verifyStreaming() {
 		DefaultResourceLoader,
 		SessionManager,
 		SettingsManager,
+		VERSION,
 	} = await import("@earendil-works/pi-coding-agent");
 	const model = {
 		id: "synthetic",
@@ -301,15 +302,35 @@ export async function verifyStreaming() {
 		);
 		assert.ok(!userTexts(session.messages).includes("discard me"));
 
+		// Pi 0.86.0 routed direct steer()/followUp() through input handlers,
+		// defaulting source to "interactive"; earlier releases bypass the hook.
+		// The TUI uses these helpers to flush prompts queued during compaction.
+		const helpersObserved = VERSION !== "0.85.1";
 		await hold("direct helper seed", async () => {
 			const before = observed.length;
 			await session.steer("direct steer");
 			await session.followUp("direct followUp");
-			assert.equal(
-				observed.length,
-				before,
-				"Direct SDK queue helpers bypass input",
-			);
+			if (helpersObserved) {
+				assert.deepEqual(
+					observed.slice(before).map((e) => [e.text, e.streamingBehavior]),
+					[
+						["direct steer", "steer"],
+						["direct followUp", "followUp"],
+					],
+				);
+				assert.ok(
+					observed
+						.slice(before)
+						.every((e) => e.eligible && e.source === "interactive"),
+					"Direct helpers default to eligible interactive input",
+				);
+			} else {
+				assert.equal(
+					observed.length,
+					before,
+					"Direct SDK queue helpers bypass input",
+				);
+			}
 			plans.push({}, {});
 		});
 		assert.deepEqual(userTexts(session.messages).slice(-3), [
@@ -317,10 +338,12 @@ export async function verifyStreaming() {
 			"direct steer",
 			"direct followUp",
 		]);
-		assert.ok(
-			!observed.some((e) =>
+		assert.equal(
+			observed.filter((e) =>
 				["direct steer", "direct followUp"].includes(e.text),
-			),
+			).length,
+			helpersObserved ? 2 : 0,
+			"Delivery does not add observations",
 		);
 
 		let beforeCalls = calls.length;
@@ -352,10 +375,10 @@ export async function verifyStreaming() {
 			"context_length_exceeded: synthetic overflow",
 		]);
 		assert.equal(calls.length, 13);
-		assert.equal(observed.length, 11);
+		assert.equal(observed.length, helpersObserved ? 13 : 11);
 		assert.deepEqual(plans, []);
 		console.log(
-			`SDK STREAM PASS: ${calls.length} scripted in-process provider calls; separate-extension transform, streaming steer/followUp delivery, raw-to-expanded skill/template, command bypass, clear/resubmit, direct-helper bypass, retry and overflow-compaction replay without duplicate input. SDK-bound TUI mode, not real TUI/provider.`,
+			`SDK STREAM PASS: Pi ${VERSION}; ${calls.length} scripted in-process provider calls; separate-extension transform, streaming steer/followUp delivery, raw-to-expanded skill/template, command bypass, clear/resubmit, direct helpers ${helpersObserved ? "observed once" : "bypass input"}, retry and overflow-compaction replay without duplicate input. SDK-bound TUI mode, not real TUI/provider.`,
 		);
 	} finally {
 		unsubscribe();
