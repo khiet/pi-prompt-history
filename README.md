@@ -1,10 +1,10 @@
 # pi-prompt-history
 
-**Development only - not a release.** A Pi extension that records the prompts you type to a local JSONL file and searches them with `/history`. A shortcut, pause, and deletion are not built yet; they arrive with [#5](https://github.com/khiet/pi-prompt-history/issues/5), [#6](https://github.com/khiet/pi-prompt-history/issues/6), and [#8](https://github.com/khiet/pi-prompt-history/issues/8). [The PRD](https://github.com/khiet/pi-prompt-history/issues/1) is the full contract. The package is `private` and must not be published.
+**Development only - not a release.** A Pi extension that records the prompts you type to a local JSONL file and searches them with Ctrl+R or `/history`. Pause and deletion are not built yet; they arrive with [#6](https://github.com/khiet/pi-prompt-history/issues/6) and [#8](https://github.com/khiet/pi-prompt-history/issues/8). [The PRD](https://github.com/khiet/pi-prompt-history/issues/1) is the full contract. The package is `private` and must not be published.
 
 ## Usage
 
-Type `/history` in Pi's interactive TUI. A picker opens with an empty query, listing prompts recorded in the current directory (the exact cwd string, not the Git root), newest first. Every opening starts this way; neither the draft nor the last query carries over.
+Press Ctrl+R (or your [configured shortcut](#shortcut)) or type `/history` in Pi's interactive TUI. Both open the same picker. It opens with an empty query, listing prompts recorded in the current directory (the exact cwd string, not the Git root), newest first. Every opening starts this way; neither the draft nor the last query carries over.
 
 - Typing searches every recorded prompt for the query as a literal substring, after lowercasing both with JavaScript's `toLowerCase()`. Punctuation has no special meaning. Case folding is simple and locale-independent: `CAFÉ` matches `café`, but `ß` does not match `ss`, and a composed `é` does not match `e` plus a combining accent.
 - At most the newest 100 matches are listed, and the picker says when there are more. Type more of the query to reach older prompts; there is no paging.
@@ -15,7 +15,33 @@ Type `/history` in Pi's interactive TUI. A picker opens with an empty query, lis
 
 Restored text is the stored text as Pi's editor normalizes it: tabs become spaces and CR/CRLF become LF. The stored record itself is never changed. The list shows each prompt on one line and the preview up to eight of its lines, both with terminal control characters drawn as visible symbols; the restored text keeps them.
 
-The picker distinguishes no prompts recorded in the scope from no prompts matching the query. Each search reads the history file. If it cannot be read, the picker shows it as unavailable with the file and error code instead of any earlier results, and leaves the file untouched. `/history` does nothing outside the TUI, and only one picker opens at a time.
+The picker distinguishes no prompts recorded in the scope from no prompts matching the query. Each search reads the history file. If it cannot be read, the picker shows it as unavailable with the file and error code instead of any earlier results, and leaves the file untouched. The shortcut and `/history` do nothing outside the TUI, and only one picker opens at a time.
+
+## Shortcut
+
+The search shortcut defaults to `ctrl+r`. Pi binds Ctrl+R to session rename (`app.session.rename`); this extension deliberately shadows it while the editor is focused, because history search is the more familiar use of that key. Pi shows a shortcut-conflict warning at startup saying so.
+
+To keep both actions, move rename to another key in `<agent dir>/keybindings.json` yourself, for example:
+
+```json
+{ "app.session.rename": "alt+r" }
+```
+
+Check `/hotkeys` first for a free key, then run `/reload`. The extension never edits `keybindings.json`.
+
+To use a different key for search instead, create `<agent dir>/prompt-history/config.json`:
+
+```json
+{ "shortcut": "alt+h" }
+```
+
+- `shortcut` is the only setting. Retention, storage location, project overrides, and ephemeral-session recording are not configurable.
+- The key uses the key format in Pi's `docs/keybindings.md` and must include `ctrl`, `alt`, or `super`, or be a function key (`f1`-`f12`, optionally with `shift`), so it cannot take over typing or editing.
+- Changes apply after `/reload` or a restart; a running session keeps the key it started with.
+- A missing file means `ctrl+r`. If the file cannot be read, is not valid JSON, has any other setting, or has an invalid `shortcut`, the whole file is ignored, `ctrl+r` is used, and a warning names the file, the problem, and the fix. The warning never quotes the file's contents.
+- If the key is bound to one of Pi's reserved actions (such as `app.clear` or `app.interrupt`), Pi skips the shortcut and warns; use `/history` or choose another key.
+
+`/history` always works, whatever the shortcut's state.
 
 ## Privacy: what loading this extension changes
 
@@ -90,14 +116,14 @@ pi install /absolute/path/to/pi-prompt-history
 
 Layout:
 
-- `src/index.ts`: the one extension entry point. Pi registration, the capture policy, the `/history` command, lifecycle, and warnings.
+- `src/index.ts`: the one extension entry point. Pi registration, the capture policy, the `/history` command and search shortcut, lifecycle, and warnings.
 - `src/history.ts`: the JSONL store. File I/O only; knows nothing about Pi.
-- `src/picker.ts`: the `/history` picker, composed from Pi's `Input` and `SelectList`. No file I/O.
-- `src/config.ts`: store paths from `getAgentDir()`.
+- `src/picker.ts`: the search picker, composed from Pi's `Input` and `SelectList`. No file I/O.
+- `src/config.ts`: store and config paths from `getAgentDir()`, and the validated shortcut setting.
 - `test/`: behavior tests. `harness.ts` is a minimal host that records registered handlers and fires events at them; it is not a Pi runtime.
-- `spike/` and `docs/research/`: the compatibility spike (`npm run spike`) and research that shaped the design.
+- `spike/` and `docs/research/`: the compatibility spike (`npm run spike`) and research that shaped the design. `spike/shortcut.py` drives the real extension in real Pi to check the shortcut, its config, reload, and `/history`.
 
-The extension registers handlers only; it opens nothing until the first eligible prompt or `/history`. Each Pi session runtime (startup, `/reload`, `/new`, `/resume`, `/fork`) gets a fresh extension instance, and `session_shutdown` stops capture, waits for pending writes, and closes the store, so a replaced runtime never records, and a picker still open when its session shuts down restores nothing.
+The extension registers handlers and reads `config.json` once to register the shortcut; it opens the history file only at the first eligible prompt or search. Each Pi session runtime (startup, `/reload`, `/new`, `/resume`, `/fork`) gets a fresh extension instance, and `session_shutdown` stops capture, waits for pending writes, and closes the store, so a replaced runtime never records, and a picker still open when its session shuts down restores nothing.
 
 Only `@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui` are imported at runtime, both as `*` peer dependencies; there are no other runtime dependencies. The published-files allowlist is in `package.json`.
 
@@ -111,6 +137,8 @@ Only `@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui` are imported
 
 On both Pi versions, typecheck and `npm test` pass, and Pi's own extension loader loads the package from its manifest with no errors and no storage I/O. The `*` peer range is packaging convention, not a claim of wider support.
 
+On both Pi versions, `python3 spike/shortcut.py` passes in a real TUI (PTY, `TERM=xterm-256color`): Ctrl+R opens the picker instead of rename, with Pi's conflict warning; a configured Alt+H opens it and Ctrl+R then does not; an invalid config warns and falls back to Ctrl+R; with `app.clear` bound to Ctrl+R, Pi skips the shortcut and `/history` still opens; and after editing the config, the old key keeps working until `/reload`, then only the new key does.
+
 The tests use a minimal host harness. They do not prove real-TUI streaming, replay, or lifecycle behavior. The input-hook fields, exclusions, and session transitions the capture relies on were observed in the real TUI and SDK by the [compatibility spike](docs/research/compatibility-spike.md).
 
 ## Remaining gates
@@ -121,6 +149,7 @@ Not verified, and required before any release:
 - Exclusion of input from real print, JSON, and RPC frontends.
 - Lifecycle races in real Pi: repeated shutdown delivery and writes still pending during session replacement.
 - Real attachments: clipboard and drag-and-drop images alongside text, and the image warning before `/history` replaces such a draft.
-- The `/history` picker in the real TUI: restoration and editor normalization, cancellation, IME composition, themes, resizing, and narrow terminals.
+- The search shortcut in terminals other than the PTY check above: other terminal emulators, `super` and `ctrl+shift` keys (which need the Kitty keyboard protocol), tmux/screen, and reserved actions other than `app.clear`.
+- The picker in the real TUI: restoration and editor normalization, cancellation, IME composition, themes, resizing, and narrow terminals.
 - Concurrent appends from several Pi processes (owned by [#7](https://github.com/khiet/pi-prompt-history/issues/7)).
 - Any Pi release other than 0.85.1 and 0.87.1, and any other Node version or platform.

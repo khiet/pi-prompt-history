@@ -3,14 +3,14 @@ import type {
 	ExtensionContext,
 	InputEvent,
 } from "@earendil-works/pi-coding-agent";
-import { resolveStorePaths } from "./config.ts";
+import { loadConfig, resolveStorePaths } from "./config.ts";
 import { type History, MAX_PROMPT_BYTES, openHistory } from "./history.ts";
 import { createPicker, type PickerSearch } from "./picker.ts";
 
 const WARNING_INTERVAL_MS = 60_000;
 
 /** Each kind of problem is rate-limited on its own. */
-type WarningKind = "too-large" | "write-failed" | "capture-failed";
+type WarningKind = "too-large" | "write-failed" | "capture-failed" | "config";
 
 /**
  * Pi keeps a pasted image in the draft as its file path; these are the image
@@ -142,18 +142,33 @@ export default function promptHistory(pi: ExtensionAPI): void {
 		if (live) ctx.ui.setEditorText(text);
 	};
 
+	const openPicker = async (ctx: ExtensionContext) => {
+		if (!live || ctx.mode !== "tui" || pickerOpen) return;
+		pickerOpen = true;
+		try {
+			await recall(ctx);
+		} finally {
+			pickerOpen = false;
+		}
+	};
+
 	pi.registerCommand("history", {
 		description: "Search recorded prompts and restore one into the editor",
-		handler: async (_args, ctx) => {
-			if (!live || ctx.mode !== "tui" || pickerOpen) return;
-			pickerOpen = true;
-			try {
-				await recall(ctx);
-			} finally {
-				pickerOpen = false;
-			}
-		},
+		handler: (_args, ctx) => openPicker(ctx),
 	});
+
+	// Read once per runtime, so an edited config applies on /reload or restart
+	// and never rebinds a running one.
+	const config = loadConfig();
+	pi.registerShortcut(config.shortcut, {
+		description: "Search recorded prompts",
+		handler: openPicker,
+	});
+
+	if (config.problem) {
+		const message = `Prompt history config ${config.configFile} ${config.problem}. Using ${config.shortcut}; /history still works. Fix the file, then run /reload.`;
+		pi.on("session_start", (_event, ctx) => warn(ctx, "config", message));
+	}
 
 	pi.on("session_shutdown", async () => {
 		live = false;
