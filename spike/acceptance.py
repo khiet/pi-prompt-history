@@ -296,7 +296,7 @@ def unicode(root, start):
     pi.type(text)
     pi.wait("turn", 1)
     assert pi.recorded() == [text], pi.recorded()
-    # Only the typed query can select it: the draft starts empty.
+    # A restore proves the query matched: a non-match lists nothing to select.
     for query in ("入力 CAFÉ", "🙂 (a+b)*"):
         pi.press(CTRL_R)
         pi.press(query)

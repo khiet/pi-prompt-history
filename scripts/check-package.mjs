@@ -41,7 +41,7 @@ execFileSync("git", ["ls-files", "--error-unmatch", "package-lock.json"], {
 	stdio: "ignore",
 });
 
-// Files only, no directories or globs, so nothing unlisted can slip in.
+// npm must pack exactly the allowlist plus package.json and README.md.
 assert.ok(Array.isArray(manifest.files) && manifest.files.length > 0);
 const [packed] = JSON.parse(
 	execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], {
