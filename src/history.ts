@@ -77,7 +77,7 @@ export type History = {
 	 * Removes every record in scope (every directory when `cwd` is omitted)
 	 * and resolves with how many. Scope and count are decided when the rewrite
 	 * reads the file, so records appended after an earlier search are cleared
-	 * and counted too. Clearing every directory also drops malformed lines.
+	 * and counted too. Like every rewrite, it also drops malformed lines.
 	 */
 	clear(scope: Pick<SearchRequest, "cwd">): Promise<number>;
 	/**
