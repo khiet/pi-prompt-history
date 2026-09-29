@@ -306,10 +306,11 @@ describe("/history lifecycle guards", () => {
 		assert.deepEqual(host.ui.editorWrites, []);
 	});
 
-	test("does not open once the session has shut down", async () => {
+	test("does not open when the session shuts down while history loads", async () => {
 		await seed([{ text: "old prompt", ts: 1 }]);
+		const running = host.command("history");
 		await host.shutdown();
-		await host.command("history");
+		await running;
 
 		assert.equal(host.ui.pickers.length, 0);
 	});
