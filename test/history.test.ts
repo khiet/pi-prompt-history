@@ -435,6 +435,35 @@ describe("history search", () => {
 		assert.deepEqual(await texts("bugin"), []);
 	});
 
+	test("matches every whitespace-separated term, in any order", async () => {
+		await seed([
+			{ text: "test the migrate script", ts: 1 },
+			{ text: "migrate the test db", ts: 2 },
+			{ text: "migrate only", ts: 3 },
+		]);
+
+		assert.deepEqual(await texts("migrate test"), [
+			"migrate the test db",
+			"test the migrate script",
+		]);
+		assert.deepEqual(await texts("migrate xyz"), []);
+	});
+
+	test("ignores repeated and surrounding whitespace in the query", async () => {
+		await seed([
+			{ text: "test the migrate script", ts: 1 },
+			{ text: "write docs", ts: 2 },
+		]);
+
+		assert.deepEqual(await texts("  migrate \t  test\n"), [
+			"test the migrate script",
+		]);
+		assert.deepEqual(await texts(" \t "), [
+			"write docs",
+			"test the migrate script",
+		]);
+	});
+
 	test("treats punctuation and pattern syntax as plain characters", async () => {
 		await seed([
 			{ text: "grep 'a.*b' | sort", ts: 1 },

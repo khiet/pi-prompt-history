@@ -69,8 +69,10 @@ export type History = {
 		entry: Pick<HistoryRecord, "text" | "cwd" | "session">,
 	): Promise<RecordOutcome>;
 	/**
-	 * Matches `query` against every stored record in scope. Matching is a
-	 * literal substring test after `toLowerCase()` on both sides: simple case
+	 * Matches `query` against every stored record in scope. The query splits on
+	 * whitespace into terms, and a record matches when its text contains every
+	 * term in any order; a query with no terms matches everything. Each term is
+	 * a literal substring test after `toLowerCase()` on both sides: simple case
 	 * mappings apply in any script, but there is no locale-aware or full case
 	 * folding ("ß" never matches "ss") and no Unicode normalization (composed
 	 * and decomposed accents differ). Reloads first when the file changed since
@@ -262,11 +264,12 @@ export function openHistory(paths: StorePaths): History {
 			const read = pending.then(refresh);
 			pending = read.catch(() => {});
 			const { records, malformed } = await read;
-			const needle = query.toLowerCase();
+			const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
 			const byText = new Map<string, SearchEntry>();
 			for (const record of records) {
 				if (cwd !== undefined && record.cwd !== cwd) continue;
-				if (!record.text.toLowerCase().includes(needle)) continue;
+				const haystack = record.text.toLowerCase();
+				if (!terms.every((term) => haystack.includes(term))) continue;
 				const seen = byText.get(record.text);
 				if (!seen) byText.set(record.text, { ...record, copies: 1 });
 				else if (newestFirst(record, seen) < 0)

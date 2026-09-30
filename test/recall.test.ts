@@ -144,6 +144,21 @@ describe("/history picker", () => {
 		assert.deepEqual(host.ui.editorWrites, ["Explain this DIFF"]);
 	});
 
+	test("typing several words finds prompts containing them in any order", async () => {
+		await seed([
+			{ text: "test the migrate script", ts: 1 },
+			{ text: "write docs", ts: 2 },
+		]);
+		const { picker, running } = await openHistory();
+
+		picker.press(..."migrate test");
+		await picker.until((shown) => !shown.includes("write docs"));
+		picker.press(keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, ["test the migrate script"]);
+	});
+
 	test("a query with no matches says so and restores nothing", async () => {
 		await seed([{ text: "write tests", ts: 1 }]);
 		const { picker, running } = await openHistory();
