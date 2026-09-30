@@ -36,6 +36,9 @@ export type SearchRequest = {
 	cwd?: string | undefined;
 };
 
+/** Every record of one exact text, in one cwd or, when omitted, anywhere. */
+export type DeleteTarget = Pick<SearchRequest, "cwd"> & { text: string };
+
 /** The newest record of one distinct text in scope. */
 export type SearchEntry = HistoryRecord & {
 	/** Records in scope with byte-identical text, this one included. */
@@ -81,7 +84,7 @@ export type History = {
 	 * whose text is byte-identical to `text`, and resolves with how many.
 	 * Resolves 0, without rewriting, when none match.
 	 */
-	delete(target: { text: string; cwd?: string | undefined }): Promise<number>;
+	delete(target: DeleteTarget): Promise<number>;
 	/**
 	 * Removes every record in scope (every directory when `cwd` is omitted)
 	 * and resolves with how many. Scope and count are decided when the rewrite
@@ -260,6 +263,7 @@ export function openHistory(paths: StorePaths): History {
 			pending = read.catch(() => {});
 			const { records, malformed } = await read;
 			const needle = query.toLowerCase();
+			// Each text keeps its newest record and counts every copy in scope.
 			const byText = new Map<string, SearchEntry>();
 			for (const record of records) {
 				if (cwd !== undefined && record.cwd !== cwd) continue;

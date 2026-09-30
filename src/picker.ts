@@ -12,6 +12,7 @@ import {
 	truncateToWidth,
 } from "@earendil-works/pi-tui";
 import {
+	type DeleteTarget,
 	MAX_RESULTS,
 	type SearchEntry,
 	type SearchRequest,
@@ -35,9 +36,7 @@ export type DeleteOutcome =
  * Deletes every record of `text` in scope (every directory when `cwd` is
  * omitted); must resolve, reporting failures.
  */
-export type PickerDelete = (
-	target: Pick<SearchRequest, "cwd"> & { text: string },
-) => Promise<DeleteOutcome>;
+export type PickerDelete = (target: DeleteTarget) => Promise<DeleteOutcome>;
 
 export type PickerOptions = {
 	/** The directory the picker opens scoped to. */
@@ -77,7 +76,7 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 	// Enter pressed mid-search applies to the results the user is waiting for,
 	// unless another key arrives first.
 	let confirmWhenSettled = false;
-	// The record Ctrl+D asked about, awaiting y or any other key.
+	// The prompt Ctrl+D asked about, awaiting y or any other key.
 	let askingToDelete: SearchEntry | undefined;
 	// From the confirmed deletion until the results without it arrive.
 	let deleting = false;
@@ -155,7 +154,7 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 			});
 	};
 
-	const deleteRecord = (record: SearchEntry) => {
+	const deletePrompt = (record: SearchEntry) => {
 		const position =
 			content.kind === "records"
 				? content.records.findIndex(({ id }) => id === record.id)
@@ -171,11 +170,14 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 
 	const footer = () => {
 		if (deleting) return theme.fg("dim", "Deleting...");
-		if (askingToDelete)
+		if (askingToDelete) {
+			const { copies } = askingToDelete;
+			const count = copies > 1 ? ` (${copies} copies)` : "";
 			return theme.fg(
 				"warning",
-				`Delete this prompt${askingToDelete.copies > 1 ? ` (${askingToDelete.copies} copies)` : ""}? y delete  any other key keep`,
+				`Delete this prompt${count}? y delete  any other key keep`,
 			);
+		}
 		const toggle = allDirectories ? "this directory" : "all directories";
 		return theme.fg(
 			"dim",
@@ -260,7 +262,7 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 			if (askingToDelete) {
 				const record = askingToDelete;
 				askingToDelete = undefined;
-				if (data === "y" || data === "Y") deleteRecord(record);
+				if (data === "y" || data === "Y") deletePrompt(record);
 				options.requestRender();
 				return;
 			}
