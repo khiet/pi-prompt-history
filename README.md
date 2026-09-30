@@ -74,7 +74,7 @@ Full behavior and record format: [docs/behavior.md](docs/behavior.md).
 
 ## Compatibility
 
-Tested: Pi 0.85.1, 0.87.1; Node 22.22.0, 24.21.0; macOS arm64 locally, Ubuntu CI. Untested: Windows, git install, real IME. See [docs/verification.md](docs/verification.md).
+Tested: Pi 0.85.1, 0.87.1, 0.99.1; Node 22.22.0, 24.21.0; macOS arm64 locally, Ubuntu CI. Untested: Windows, git install, real IME. See [docs/verification.md](docs/verification.md).
 
 ## Development
 

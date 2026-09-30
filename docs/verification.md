@@ -52,7 +52,7 @@ Package rules, checked by `npm run check:package`:
 
 | | Tested |
 | --- | --- |
-| Pi | 0.85.1 (locked) and 0.87.1, the current stable release on 2026-09-29 |
+| Pi | 0.85.1 (locked), 0.87.1, and 0.99.1, the current stable release on 2026-09-30 |
 | Node | 22.22.0 and 24.21.0 |
 | Platform | macOS arm64 locally; Ubuntu in CI |
 
@@ -68,6 +68,8 @@ On both Pi releases, with Node 22.22.0:
 - `spike/acceptance.py` passes: idle, steering (Enter while streaming), and follow-up (Alt+Enter) prompts are each recorded once, and delivering them records nothing more; prompts queued during `/compact` are recorded as described in [What gets recorded](behavior.md#what-gets-recorded) (only the first on 0.85.1, each once on 0.87.1); the [built-in history comparison](behavior.md#compared-with-pis-built-in-history); capture and the picker after `/reload`, `/new`, `/resume`, and `/fork`, with each prompt recorded once; restore with normalization and without submitting, and Escape keeping the draft; the image warning, declined and accepted; Tab scope and Ctrl+D with its confirmation; `/history clear cwd` and `clear all` through Pi's confirmation dialog, cancelled and accepted; resizing to 24, 10, 200, and 60 columns with the picker open, without Pi exiting and with restore still exact afterwards (not how it renders); Japanese, accented, and emoji text typed and found with case-folded and punctuation queries; the picker opening and restoring under the light theme; Pi's `modal-editor.ts` example loaded alongside; two Ctrl+R presses leaving one picker; and a picker open while the session is replaced restoring nothing into the new one.
 - `spike/shortcut.py` passes, including Ctrl+R bound to each of Pi's 18 reserved actions: Pi warns and skips the shortcut, and `/history` still opens. For `app.exit`, `app.suspend`, and `app.editor.external`, Ctrl+R itself was not pressed.
 - `spike/pause.py` and `npm run spike` pass.
+
+Pi 0.99.1 was added on 2026-09-30 on macOS arm64 with Node 22.22.0: `npm run lint`, `npm run typecheck`, `npm test` (165 tests), `npm run check:package`, `npm run smoke:install -- 0.99.1`, and `spike/acceptance.py` pass, with prompts queued during `/compact` each recorded once, as on 0.87.1. `spike/shortcut.py`, `spike/pause.py`, and `npm run spike` were not rerun on 0.99.1.
 
 After the MIT license change, `npm run lint`, `npm run typecheck`, `npm test`, `npm run check:package`, and `npm run smoke:install` were rerun and pass on both Pi releases with Node 22.22.0, and CI reran them with Node 24.21.0 (see below). The documented install was also checked from a fresh clone, with isolated home and agent directories: `pi install` on the checkout, with no `node_modules`, records it in `settings.json` and `pi list` shows it. That check does not load the extension; `smoke:install` covers loading, for the packed package.
 

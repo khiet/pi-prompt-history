@@ -209,7 +209,13 @@ describe("prefilling the query from the draft", () => {
 		assert.deepEqual(host.ui.editorWrites, ["deploy staging"]);
 	});
 
-	for (const draft of ["", "   ", "deploy\nstaging", "deploy\x1b[201~"])
+	for (const draft of [
+		"",
+		"   ",
+		"deploy\nstaging",
+		"deploy\rstaging",
+		"deploy\x1b[201~",
+	])
 		test(`${JSON.stringify(draft)} opens with an empty query on recent prompts`, async () => {
 			await seed([
 				{ text: "deploy the app", ts: 1 },

@@ -323,7 +323,9 @@ function isEligible(event: InputEvent, ctx: ExtensionContext): boolean {
  * escape character, which could end the paste that seeds the query field.
  */
 function draftQuery(draft: string): string {
-	return /[\r\n\x1b]/.test(draft) || draft.trim() === "" ? "" : draft;
+	return /[\r\n]/.test(draft) || draft.includes("\x1b") || draft.trim() === ""
+		? ""
+		: draft;
 }
 
 function plural(count: number): string {

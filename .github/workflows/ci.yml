@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         node: [22.22.0, 24.21.0]
-        pi: [0.85.1, 0.87.1]
+        pi: [0.85.1, 0.87.1, 0.99.1]
     name: Node ${{ matrix.node }}, Pi ${{ matrix.pi }}
     runs-on: ubuntu-latest
     steps:
