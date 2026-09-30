@@ -39,6 +39,7 @@ export const keys = {
 	escape: "\x1b",
 	tab: "\t",
 	ctrlD: "\x04",
+	ctrlU: "\x15",
 };
 
 export type ContextOptions = {

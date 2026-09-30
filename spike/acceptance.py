@@ -16,6 +16,7 @@ from harness import (
     ALT_ENTER,
     CTRL_D,
     CTRL_R,
+    CTRL_U,
     ENTER,
     ESC,
     PI_ROOT,
@@ -204,6 +205,8 @@ def restore(root, start):
     pi.press(ESC)
     assert pi.editor() == "draft text", "cancel changed the draft"
     pi.press(CTRL_R)
+    # The single-line draft prefills the query; clearing it lists the record.
+    pi.press(CTRL_U)
     pi.press(ENTER)
     assert pi.editor() == "alpha    beta\ngamma\ndelta", repr(pi.editor())
     assert pi.events("input") == [], "restore submitted the prompt"
@@ -216,10 +219,12 @@ def image(root, start):
     draft = "look at /tmp/shot.png please"
     pi.press(draft)
     pi.press(CTRL_R)
+    pi.press(CTRL_U)
     assert "Replace draft?" in pi.press(ENTER), "no image warning"
     pi.press(ESC)
     assert pi.editor() == draft, "declining changed the draft"
     pi.press(CTRL_R)
+    pi.press(CTRL_U)
     assert "Replace draft?" in pi.press(ENTER), "no image warning on retry"
     pi.press(ENTER)
     assert pi.editor() == "recalled prompt", repr(pi.editor())
@@ -302,7 +307,7 @@ def unicode(root, start):
         pi.press(query)
         pi.press(ENTER)
         assert pi.editor() == text, f"{query!r} restored {pi.editor()!r}"
-        pi.press("\x15")  # Ctrl+U empties the draft for the next query.
+        pi.press(CTRL_U)  # Empties the draft so it does not prefill the next query.
     pi.press(CTRL_R)
     assert "No prompts match." in pi.press("ss"), "a non-matching query listed prompts"
     pi.press(ESC)

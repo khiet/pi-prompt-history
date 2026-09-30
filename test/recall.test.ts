@@ -105,6 +105,8 @@ describe("/history picker", () => {
 		host.ui.draft = "work in progress";
 		const { picker, running } = await openHistory();
 
+		picker.press(keys.ctrlU);
+		await picker.until((shown) => shown.includes("newer"));
 		picker.press(keys.down, keys.enter);
 		await running;
 
@@ -172,6 +174,59 @@ describe("/history picker", () => {
 	});
 });
 
+describe("prefilling the query from the draft", () => {
+	test("a single-line draft opens as the query, already filtered", async () => {
+		await seed([
+			{ text: "deploy the app", ts: 1 },
+			{ text: "write tests", ts: 2 },
+		]);
+		host.ui.draft = "deploy";
+		const { picker, running } = await openHistory();
+
+		const shown = screen(picker.render());
+		assert.ok(shown.includes("deploy the app"), shown);
+		assert.ok(!shown.includes("write tests"), shown);
+		picker.press(keys.escape);
+		await running;
+	});
+
+	test("Ctrl+R prefills too, and the query is edited like a typed one", async () => {
+		await seed([
+			{ text: "deploy the app", ts: 1 },
+			{ text: "deploy staging", ts: 2 },
+		]);
+		host.ui.draft = "deploy";
+		const opened = host.nextPicker();
+		const running = host.shortcut("ctrl+r");
+		const picker = await opened;
+		assert.ok(screen(picker.render()).includes("deploy the app"));
+
+		picker.press(..." st");
+		await picker.until((shown) => !shown.includes("deploy the app"));
+		picker.press(keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, ["deploy staging"]);
+	});
+
+	for (const draft of ["", "   ", "deploy\nstaging", "deploy\x1b[201~"])
+		test(`${JSON.stringify(draft)} opens with an empty query on recent prompts`, async () => {
+			await seed([
+				{ text: "deploy the app", ts: 1 },
+				{ text: "write tests", ts: 2 },
+			]);
+			host.ui.draft = draft;
+			const { picker, running } = await openHistory();
+
+			const shown = picker.render();
+			assert.ok(!shown[1]?.includes("deploy"), shown[1]);
+			assert.ok(screen(shown).includes("deploy the app"));
+			assert.ok(screen(shown).includes("write tests"));
+			picker.press(keys.escape);
+			await running;
+		});
+});
+
 describe("replacing a draft that contains an image", () => {
 	for (const draft of [
 		"compare with /tmp/pi-clipboard-0f3a.png please",
@@ -184,7 +239,7 @@ describe("replacing a draft that contains an image", () => {
 			host.ui.confirmAnswer = false;
 			const { picker, running } = await openHistory();
 
-			picker.press(keys.enter);
+			picker.press(keys.ctrlU, keys.enter);
 			await running;
 
 			assert.equal(host.ui.confirms.length, 1);
@@ -198,7 +253,7 @@ describe("replacing a draft that contains an image", () => {
 		host.ui.draft = "see /tmp/pi-clipboard-1.png";
 		const { picker, running } = await openHistory();
 
-		picker.press(keys.enter);
+		picker.press(keys.ctrlU, keys.enter);
 		await running;
 
 		assert.equal(host.ui.confirms.length, 1);
@@ -210,7 +265,7 @@ describe("replacing a draft that contains an image", () => {
 		host.ui.draft = "mention image.png.bak and pngs";
 		const { picker, running } = await openHistory();
 
-		picker.press(keys.enter);
+		picker.press(keys.ctrlU, keys.enter);
 		await running;
 
 		assert.deepEqual(host.ui.confirms, []);
@@ -474,12 +529,11 @@ describe("searching history", () => {
 		await running;
 	});
 
-	test("every opening starts with an empty query in this directory", async () => {
+	test("every opening starts in this directory without the last query", async () => {
 		await seed([
 			{ text: "prompt here", ts: 1 },
 			{ text: "prompt elsewhere", ts: 2, cwd: "/work/other" },
 		]);
-		host.ui.draft = "elsewhere";
 		const first = await openHistory();
 		assert.ok(screen(first.picker.render()).includes("prompt here"));
 		first.picker.press(..."else", keys.tab);

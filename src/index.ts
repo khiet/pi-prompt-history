@@ -183,12 +183,14 @@ export default function promptHistory(pi: ExtensionAPI): void {
 
 	const recall = async (ctx: ExtensionContext) => {
 		const search = searchFor(ctx);
-		const initial = await search({ query: "", cwd: ctx.cwd });
+		const query = draftQuery(ctx.ui.getEditorText());
+		const initial = await search({ query, cwd: ctx.cwd });
 		if (!live) return;
 		const text = await ctx.ui.custom<string | undefined>(
 			(tui, theme, keybindings, done) =>
 				createPicker({
 					cwd: ctx.cwd,
+					query,
 					initial,
 					search,
 					delete: deletePrompt,
@@ -312,6 +314,16 @@ function isEligible(event: InputEvent, ctx: ExtensionContext): boolean {
 		!!ctx.sessionManager.getSessionFile() &&
 		event.text.trim() !== ""
 	);
+}
+
+/**
+ * A single-line draft seeds the query, so a typed fragment searches at once.
+ * A multiline draft would almost never match and would hide the recent list,
+ * so it and a blank draft open with an empty query. So does a draft with an
+ * escape character, which could end the paste that seeds the query field.
+ */
+function draftQuery(draft: string): string {
+	return /[\r\n\x1b]/.test(draft) || draft.trim() === "" ? "" : draft;
 }
 
 function plural(count: number): string {

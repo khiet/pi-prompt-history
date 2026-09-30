@@ -24,7 +24,7 @@ CLI = PI_ROOT / "dist/cli.js"
 ANSI = re.compile(rb"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b[@-_]")
 
 ESC, ENTER, TAB, UP, DOWN = "\x1b", "\r", "\t", "\x1b[A", "\x1b[B"
-CTRL_R, CTRL_D, F9 = "\x12", "\x04", "\x1b[20~"
+CTRL_R, CTRL_D, CTRL_U, F9 = "\x12", "\x04", "\x15", "\x1b[20~"
 ALT_ENTER = "\x1b\r"
 
 
