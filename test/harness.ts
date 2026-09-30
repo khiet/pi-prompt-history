@@ -39,7 +39,6 @@ export const keys = {
 	escape: "\x1b",
 	tab: "\t",
 	ctrlD: "\x04",
-	/** Clears the query field. */
 	ctrlU: "\x15",
 };
 
