@@ -12,8 +12,9 @@ import {
 	truncateToWidth,
 } from "@earendil-works/pi-tui";
 import {
-	type HistoryRecord,
+	type DeleteTarget,
 	MAX_RESULTS,
+	type SearchEntry,
 	type SearchRequest,
 } from "./history.ts";
 
@@ -22,7 +23,7 @@ const PREVIEW_LINES = 8;
 
 /** One search's outcome; file access happens outside the picker. */
 export type PickerContent =
-	| { kind: "records"; records: readonly HistoryRecord[]; capped: boolean }
+	| { kind: "records"; records: readonly SearchEntry[]; capped: boolean }
 	| { kind: "unavailable"; guidance: string };
 
 export type PickerSearch = (request: SearchRequest) => Promise<PickerContent>;
@@ -31,8 +32,8 @@ export type DeleteOutcome =
 	| { kind: "deleted" }
 	| { kind: "failed"; guidance: string };
 
-/** Deletes one record from storage; must resolve, reporting failures. */
-export type PickerDelete = (record: HistoryRecord) => Promise<DeleteOutcome>;
+/** Deletes the target's records; must resolve, reporting failures. */
+export type PickerDelete = (target: DeleteTarget) => Promise<DeleteOutcome>;
 
 export type PickerOptions = {
 	/** The directory the picker opens scoped to. */
@@ -41,7 +42,7 @@ export type PickerOptions = {
 	initial: PickerContent;
 	/** Must resolve, reporting failures as unavailable content. */
 	search: PickerSearch;
-	/** Runs only after the user confirms deleting the selected record. */
+	/** Runs only after the user confirms deleting the selected prompt. */
 	delete: PickerDelete;
 	theme: Theme;
 	keybindings: KeybindingsManager;
@@ -54,8 +55,9 @@ export type PickerOptions = {
  * History picker for `ctx.ui.custom()`. Each query or scope change runs a new
  * search; only the latest one's results are shown. Selection hands back the
  * stored text untouched; only its display is made safe. Ctrl+D asks before
- * deleting the selected record, then searches again with the same query and
- * scope, keeping the selection's position.
+ * deleting every copy of the selected prompt in the current scope, then
+ * searches again with the same query and scope, keeping the selection's
+ * position.
  */
 export function createPicker(options: PickerOptions): Component & Focusable {
 	const { theme, keybindings, done } = options;
@@ -63,7 +65,7 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 	let allDirectories = false;
 	let content = options.initial;
 	let list: SelectList | undefined;
-	let byId = new Map<string, HistoryRecord>();
+	let byId = new Map<string, SearchEntry>();
 	let focused = false;
 	// Only the newest search may replace the results.
 	let latestSearch = 0;
@@ -71,8 +73,8 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 	// Enter pressed mid-search applies to the results the user is waiting for,
 	// unless another key arrives first.
 	let confirmWhenSettled = false;
-	// The record Ctrl+D asked about, awaiting y or any other key.
-	let askingToDelete: HistoryRecord | undefined;
+	// The prompt Ctrl+D asked about, awaiting y or any other key.
+	let askingToDelete: SearchEntry | undefined;
 	// From the confirmed deletion until the results without it arrive.
 	let deleting = false;
 	// A failed deletion's guidance, shown until the next key.
@@ -96,7 +98,7 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 		if (record) done(record.text);
 	};
 
-	const metadata = (record: HistoryRecord) =>
+	const metadata = (record: SearchEntry) =>
 		[
 			formatTimestamp(record.ts),
 			...(allDirectories ? [displayLine(record.cwd)] : []),
@@ -124,6 +126,8 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 	};
 	setResults(options.initial);
 
+	const scope = () => (allDirectories ? undefined : options.cwd);
+
 	/** `keepPosition` selects that index, or the last result when past the end. */
 	const refresh = (keepPosition?: number) => {
 		const id = ++latestSearch;
@@ -131,7 +135,7 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 		void options
 			.search({
 				query: input.getValue(),
-				cwd: allDirectories ? undefined : options.cwd,
+				cwd: scope(),
 			})
 			.then((next) => {
 				if (id !== latestSearch) return;
@@ -147,13 +151,13 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 			});
 	};
 
-	const deleteRecord = (record: HistoryRecord) => {
+	const deletePrompt = (record: SearchEntry) => {
 		const position =
 			content.kind === "records"
 				? content.records.findIndex(({ id }) => id === record.id)
 				: 0;
 		deleting = true;
-		void options.delete(record).then((outcome) => {
+		void options.delete({ text: record.text, cwd: scope() }).then((outcome) => {
 			if (outcome.kind === "deleted") return refresh(position);
 			deleting = false;
 			problem = outcome.guidance;
@@ -163,11 +167,14 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 
 	const footer = () => {
 		if (deleting) return theme.fg("dim", "Deleting...");
-		if (askingToDelete)
+		if (askingToDelete) {
+			const { copies } = askingToDelete;
+			const count = copies > 1 ? ` (${copies} copies)` : "";
 			return theme.fg(
 				"warning",
-				"Delete this prompt? y delete  any other key keep",
+				`Delete this prompt${count}? y delete  any other key keep`,
 			);
+		}
 		const toggle = allDirectories ? "this directory" : "all directories";
 		return theme.fg(
 			"dim",
@@ -252,7 +259,7 @@ export function createPicker(options: PickerOptions): Component & Focusable {
 			if (askingToDelete) {
 				const record = askingToDelete;
 				askingToDelete = undefined;
-				if (data === "y" || data === "Y") deleteRecord(record);
+				if (data === "y" || data === "Y") deletePrompt(record);
 				options.requestRender();
 				return;
 			}

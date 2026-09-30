@@ -71,9 +71,10 @@ test("concurrent processes keep every record, repeats included, around a torn li
 			query: "same prompt",
 			cwd,
 		});
-		assert.equal(records.length, 50, cwd);
+		// Every submission is stored; search shows the text once.
+		assert.equal(records.length, 1, cwd);
+		assert.equal(records[0]?.copies, 50, cwd);
 		assert.equal(capped, false);
-		assert.equal(new Set(records.map((record) => record.id)).size, 50);
 		assert.equal(malformed, 1);
 	}
 });

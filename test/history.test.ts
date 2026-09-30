@@ -52,6 +52,7 @@ describe("history store", () => {
 			.records;
 		assert.equal(record?.text, text);
 		assert.deepEqual(Object.keys(record ?? {}).sort(), [
+			"copies",
 			"cwd",
 			"id",
 			"session",
@@ -111,7 +112,15 @@ describe("history store", () => {
 			cwd: "/work/a",
 		});
 		assert.deepEqual(found, [
-			{ v: 1, id: "a", text: "kept", cwd: "/work/a", session: "s", ts: 1 },
+			{
+				v: 1,
+				id: "a",
+				text: "kept",
+				cwd: "/work/a",
+				session: "s",
+				ts: 1,
+				copies: 1,
+			},
 		]);
 		// Blank lines are not counted.
 		assert.equal(malformed, 5);
@@ -512,6 +521,61 @@ describe("history search", () => {
 		assert.deepEqual(await texts("needle"), ["the one old needle"]);
 	});
 
+	test("lists each exact text once, as its newest record in scope", async () => {
+		await seed([
+			{ text: "same", ts: 1 },
+			{ text: "Same", ts: 2 },
+			{ text: "same", ts: 3, cwd: "/work/b" },
+			{ text: "same ", ts: 4 },
+			{ text: "same", ts: 5 },
+			{ text: "other", ts: 6 },
+			{ text: "same", ts: 7, cwd: "/work/b" },
+		]);
+		const history = openHistory(paths);
+
+		const here = await history.search({ query: "", cwd: "/work/a" });
+		assert.deepEqual(
+			here.records.map(({ text, ts, copies }) => ({ text, ts, copies })),
+			[
+				{ text: "other", ts: 6, copies: 1 },
+				{ text: "same", ts: 5, copies: 2 },
+				{ text: "same ", ts: 4, copies: 1 },
+				{ text: "Same", ts: 2, copies: 1 },
+			],
+		);
+		assert.equal(here.total, 4);
+
+		const everywhere = await history.search({ query: "same" });
+		assert.deepEqual(
+			everywhere.records.map(({ text, cwd, copies }) => ({
+				text,
+				cwd,
+				copies,
+			})),
+			[
+				{ text: "same", cwd: "/work/b", copies: 4 },
+				{ text: "same ", cwd: "/work/a", copies: 1 },
+				{ text: "Same", cwd: "/work/a", copies: 1 },
+			],
+		);
+	});
+
+	test("caps and counts distinct texts, not records", async () => {
+		await seed(
+			Array.from({ length: 202 }, (_, i) => ({
+				text: `p${i % 101}`,
+				ts: i,
+			})),
+		);
+
+		const result = await openHistory(paths).search({ query: "" });
+		assert.equal(result.records.length, 100);
+		assert.equal(result.capped, true);
+		assert.equal(result.total, 101);
+		assert.equal(result.records[0]?.text, "p100");
+		assert.equal(result.records[0]?.ts, 201);
+	});
+
 	test("reports no cap at exactly 100 matches", async () => {
 		await seed(
 			Array.from({ length: 100 }, (_, i) => ({ text: `p${i}`, ts: i })),
@@ -544,29 +608,48 @@ describe("history deletion", () => {
 			.filter((l) => l !== "")
 			.map((l) => JSON.parse(l) as { id: string; cwd: string });
 
-	test("deletes one record and keeps other submissions of the same text", async () => {
+	test("deletes every record of the exact text in one directory", async () => {
 		await seed([
-			{ id: "first", text: "same text", ts: 1 },
-			{ id: "second", text: "same text", ts: 2 },
-			{ id: "other", text: "other", ts: 3 },
+			{ id: "first", text: "same", ts: 1 },
+			{ id: "elsewhere", text: "same", ts: 2, cwd: "/work/b" },
+			{ id: "near", text: "Same", ts: 3 },
+			{ id: "second", text: "same", ts: 4 },
+			{ id: "other", text: "other", ts: 5 },
 		]);
 		const history = openHistory(paths);
 
-		assert.equal(await history.delete("second"), true);
+		assert.equal(await history.delete({ text: "same", cwd: "/work/a" }), 2);
 		await history.close();
 
 		assert.deepEqual(
 			(await stored()).map((record) => record.id),
-			["first", "other"],
+			["elsewhere", "near", "other"],
 		);
 	});
 
-	test("deleting a record that is already gone changes nothing", async () => {
+	test("deletes the exact text in every directory when no cwd is given", async () => {
+		await seed([
+			{ id: "a", text: "same", ts: 1 },
+			{ id: "b", text: "same", ts: 2, cwd: "/work/b" },
+			{ id: "kept", text: "same ", ts: 3 },
+		]);
+		const history = openHistory(paths);
+
+		assert.equal(await history.delete({ text: "same" }), 2);
+		await history.close();
+
+		assert.deepEqual(
+			(await stored()).map((record) => record.id),
+			["kept"],
+		);
+	});
+
+	test("deleting a text that is already gone changes nothing", async () => {
 		await seed([{ id: "kept", text: "kept", ts: 1 }]);
 		const before = await stat(paths.historyFile);
 		const history = openHistory(paths);
 
-		assert.equal(await history.delete("missing"), false);
+		assert.equal(await history.delete({ text: "missing" }), 0);
 		await history.close();
 
 		assert.equal((await stat(paths.historyFile)).ino, before.ino);
@@ -628,14 +711,14 @@ describe("history deletion", () => {
 		await seed(
 			Array.from({ length: 10_500 }, (_, i) => ({
 				id: `id-${String(i + 1).padStart(5, "0")}`,
-				text: "x",
+				text: `x${i + 1}`,
 				ts: i + 1,
 			})),
 		);
 		await chmod(paths.historyFile, 0o644);
 		const history = openHistory(paths);
 
-		assert.equal(await history.delete("id-10500"), true);
+		assert.equal(await history.delete({ text: "x10500" }), 1);
 		await history.close();
 
 		const ids = (await stored()).map((record) => record.id);
@@ -651,12 +734,12 @@ describe("history deletion", () => {
 	}, async () => {
 		await seed([
 			{ id: "a", text: "x", ts: 1 },
-			{ id: "b", text: "x", ts: 2, cwd: "/work/b" },
+			{ id: "b", text: "y", ts: 2, cwd: "/work/b" },
 		]);
 		const history = openHistory(paths);
 		await chmod(paths.dir, 0o500);
 		try {
-			await assert.rejects(history.delete("a"), { code: "EACCES" });
+			await assert.rejects(history.delete({ text: "x" }), { code: "EACCES" });
 			await assert.rejects(history.clear({}), { code: "EACCES" });
 		} finally {
 			await chmod(paths.dir, 0o700);
@@ -675,7 +758,7 @@ describe("history deletion", () => {
 		const history = openHistory(paths);
 		await chmod(paths.historyFile, 0o200);
 		try {
-			await assert.rejects(history.delete("a"), { code: "EACCES" });
+			await assert.rejects(history.delete({ text: "x" }), { code: "EACCES" });
 			await assert.rejects(history.clear({}), { code: "EACCES" });
 		} finally {
 			await chmod(paths.historyFile, 0o600);
@@ -689,7 +772,7 @@ describe("history deletion", () => {
 		const history = openHistory(paths);
 		await history.close();
 
-		await assert.rejects(history.delete("a"));
+		await assert.rejects(history.delete({ text: "x" }));
 		await assert.rejects(history.clear({}));
 		assert.equal((await stored()).length, 1);
 	});

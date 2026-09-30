@@ -586,6 +586,20 @@ describe("selection", () => {
 		assert.deepEqual(host.ui.editorWrites, ["second"]);
 	});
 
+	test("a repeated prompt is one row", async () => {
+		await seed([
+			{ text: "older", ts: 1 },
+			{ text: "repeated", ts: 2 },
+			{ text: "repeated", ts: 3 },
+		]);
+		const { picker, running } = await openHistory();
+
+		picker.press(keys.down, keys.enter);
+		await running;
+
+		assert.deepEqual(host.ui.editorWrites, ["older"]);
+	});
+
 	test("filtering moves the selection to the newest match", async () => {
 		await seed([
 			{ text: "alpha one", ts: 3 },

@@ -22,11 +22,12 @@ pi install /absolute/path/to/pi-prompt-history
 Press Ctrl+R (or your [configured shortcut](#shortcut)) or type `/history` in Pi's interactive TUI. Both open the same picker. It opens with an empty query, listing prompts recorded in the current directory (the exact cwd string, not the Git root), newest first. Every opening starts this way; neither the draft nor the last query carries over.
 
 - Typing searches every recorded prompt for the query as a literal substring, after lowercasing both with JavaScript's `toLowerCase()`. Punctuation has no special meaning. Case folding is simple and locale-independent: `CAFÉ` matches `café`, but `ß` does not match `ss`, and a composed `é` does not match `e` plus a combining accent.
-- At most the newest 100 matches are listed, and the picker says when there are more. Type more of the query to reach older prompts; there is no paging.
+- A prompt text is listed once per scope, however many times it was submitted, and shows its newest submission: that time and, in all directories, that directory. Only byte-identical texts are merged; no trimming, case folding, or normalization. Rows are ordered by that newest submission.
+- At most the newest 100 distinct prompts are listed, and the picker says when there are more. Type more of the query to reach older prompts; there is no paging.
 - Tab switches between this directory and all directories, keeping the query. In all directories, each prompt shows the directory it was typed in.
 - Up/Down selects. Below the list, a preview shows the selected prompt's local time and its first lines.
 - Enter puts the selected prompt in the editor without sending it. It **replaces the whole draft**. If the draft contains an image (Pi keeps a pasted or dropped image as a `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, or `.bmp` file path in the text), you are asked to confirm first, because the image is replaced too. The check looks only for such paths in the draft text, so it also asks when you merely typed a name like `logo.png`, and it cannot see an image Pi holds any other way. Images from the recalled prompt were never stored and are not restored.
-- Ctrl+D asks before deleting the selected prompt; see [Delete and clear](#delete-and-clear).
+- Ctrl+D asks before deleting every copy of the selected prompt in the current scope; see [Delete and clear](#delete-and-clear).
 - Escape closes the picker and leaves the draft, including any image, unchanged.
 
 Restored text is the stored text as Pi's editor normalizes it: tabs become spaces and CR/CRLF become LF. The stored record itself is never changed. The list shows each prompt on one line and the preview up to eight of its lines, both with terminal control characters drawn as visible symbols; the restored text keeps them.
@@ -45,7 +46,7 @@ The picker distinguishes no prompts recorded in the scope from no prompts matchi
 
 ## Delete and clear
 
-In the picker, Ctrl+D asks `Delete this prompt?`. `y` deletes the selected record; any other key, Escape included, keeps it and leaves the picker open. Only that one record goes: other submissions of the same text are separate records and stay. There is no undo. Ctrl+D pressed while a search is still loading does nothing. After a deletion the picker searches again with the same query and scope, selects the result that took the deleted one's place (or the new last result when the last one was deleted), and refills the newest-100 list, so a prompt that was just past the cap appears. When nothing is left it says `No prompts match.` or `No prompts recorded in this directory yet.`
+In the picker, Ctrl+D asks `Delete this prompt?`, or `Delete this prompt (3 copies)?` when the row stands for more than one submission. `y` deletes every record with that exact text in the picker's scope: in this directory, only this directory's copies go and other directories keep theirs; in all directories, every copy goes. Otherwise an older copy would reappear straight after the deletion. Any other key, Escape included, keeps them and leaves the picker open. There is no undo. Ctrl+D pressed while a search is still loading does nothing. After a deletion the picker searches again with the same query and scope, selects the result that took the deleted one's place (or the new last result when the last one was deleted), and refills the newest-100 list, so a prompt that was just past the cap appears. When nothing is left it says `No prompts match.` or `No prompts recorded in this directory yet.`
 
 `/history clear cwd` clears the current directory's prompts, matched by the exact cwd string like the picker's scope, so other directories and subdirectories keep theirs. `/history clear all` clears every prompt this extension recorded. Bare `/history clear` or any other scope shows usage and clears nothing. Both ask for confirmation, naming the scope and how many prompts it holds; cancelling changes nothing, and an empty scope says there is nothing to clear without asking. Both work only in the TUI.
 
@@ -116,7 +117,7 @@ What "the text" means:
 - An input-transform extension that runs earlier can change the text before this extension sees it.
 - `/skill:name` and prompt-template input is stored as typed, before expansion.
 - Extension commands (`/cmd`) and Pi's built-in commands never reach the hook and are not recorded, so this is not a command history.
-- Each submission is its own record; repeats are kept.
+- Each submission is its own record; repeats are kept, and the picker lists them as one row.
 - On Pi 0.86.0 and later, other extensions that call the SDK's `steer()`/`followUp()` without a `source` look like typed input and are recorded. On 0.85.1, prompts queued during compaction are missed except the first.
 
 Session files are never read to backfill history.
@@ -145,10 +146,10 @@ One JSON object per line, appended with one write per record:
 These are fixed, not configurable:
 
 - **Retention:** the newest 10,000 records, by the search order (newest `ts` first, then `id`). Appends stay cheap: each Pi process counts the records it last loaded plus its own appends, and only when an append takes that count past 11,000 does it rewrite the file down to the newest 10,000. Other processes' appends join the count when this process next searches, so with several writers the file can briefly grow past 11,000. Unreadable lines are dropped by that rewrite.
-- **Results:** at most the newest 100 matches per search, over every retained record.
+- **Results:** at most the newest 100 distinct prompt texts per search, over every retained record.
 - **Prompt size:** 32,768 UTF-8 bytes; larger prompts are skipped.
 
-Compaction, deletion, and clearing all rewrite the file the same way, and every rewrite keeps at most the newest 10,000 records and drops unreadable lines. A rewrite writes a private (`0600`) temporary file in the same directory and renames it over the history file. If preparing it fails, the temporary file is removed, the original stays as it was, and a warning names the file, its directory, and the error code; for compaction, the next append past the threshold tries again. An unreadable history file is never rewritten. A deletion of a record that is already gone rewrites nothing.
+Compaction, deletion, and clearing all rewrite the file the same way, and every rewrite keeps at most the newest 10,000 records and drops unreadable lines. A rewrite writes a private (`0600`) temporary file in the same directory and renames it over the history file. If preparing it fails, the temporary file is removed, the original stays as it was, and a warning names the file, its directory, and the error code; for compaction, the next append past the threshold tries again. An unreadable history file is never rewritten. A deletion of a prompt that is already gone rewrites nothing.
 
 ## Several Pi processes
 
