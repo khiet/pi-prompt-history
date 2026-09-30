@@ -34,21 +34,11 @@ Restored text is the stored text as Pi's editor normalizes it: tabs become space
 
 The picker distinguishes no prompts recorded in the scope from no prompts matching the query. Before each search the extension checks whether the history file changed (size, modification time, inode, or status change) and rereads it if so, so prompts recorded by other Pi processes appear on the next keystroke. If it cannot be read, the picker shows it as unavailable with the file and error code instead of any earlier results, and leaves the file untouched. The shortcut and `/history` do nothing outside the TUI, and only one picker opens at a time.
 
-## Pause
-
-`/history pause` stops recording new prompts; `/history resume` starts again. Any argument to `/history` other than these and the [clear scopes](#delete-and-clear) shows usage and does nothing.
-
-- While paused, the footer shows `history paused`. Saved history stays searchable and restorable with Ctrl+R and `/history`.
-- The pause lasts for the whole Pi process: it survives `/reload`, `/new`, `/resume`, and `/fork`, and the indicator comes back after each. Only `/history resume` or restarting Pi turns recording back on. It is never saved to disk, so a new Pi process always starts recording.
-- It affects this extension only. It does not stop Pi from saving its own session files, and it does not remove prompts already recorded.
-- Prompts typed while paused are never recorded later; resuming does not backfill them.
-- Keeping the pause across `/reload`, `/new`, `/resume`, and `/fork` relies on an undocumented technique: a flag on `globalThis`, which works because Pi reuses one Node realm for every session runtime in a process. Pi does not promise this; `spike/pause.py` checks it on each [tested release](verification.md#tested-compatibility).
-
 ## Delete and clear
 
 In the picker, Ctrl+D asks `Delete this prompt?`, or `Delete this prompt (3 copies)?` when the row stands for more than one submission. `y` deletes every record with that exact text in the picker's scope: in this directory, only this directory's copies go and other directories keep theirs; in all directories, every copy goes. Otherwise an older copy would reappear straight after the deletion. Any other key, Escape included, keeps them and leaves the picker open. There is no undo. Ctrl+D pressed while a search is still loading does nothing. After a deletion the picker searches again with the same query and scope, selects the result that took the deleted one's place (or the new last result when the last one was deleted), and refills the newest-100 list, so a prompt that was just past the cap appears. When nothing is left it says `No prompts match.` or `No prompts recorded in this directory yet.`
 
-`/history clear cwd` clears the current directory's prompts, matched by the exact cwd string like the picker's scope, so other directories and subdirectories keep theirs. `/history clear all` clears every prompt this extension recorded. Bare `/history clear` or any other scope shows usage and clears nothing. Both ask for confirmation, naming the scope and how many prompts it holds; cancelling changes nothing, and an empty scope says there is nothing to clear without asking. Both work only in the TUI.
+`/history clear cwd` clears the current directory's prompts, matched by the exact cwd string like the picker's scope, so other directories and subdirectories keep theirs. `/history clear all` clears every prompt this extension recorded. Bare `/history clear` or any other scope shows usage and clears nothing. Both ask for confirmation, naming the scope and how many prompts it holds; cancelling changes nothing, and an empty scope says there is nothing to clear without asking. Both work only in the TUI. Any other argument to `/history` also shows usage and does nothing.
 
 The count in the confirmation is the count when it was shown. Clearing removes whatever is in scope when it runs, so prompts recorded by other Pi processes while the dialog was open are cleared too, and the notice after it reports the count actually cleared. Neither count includes unreadable lines, which `/history clear all` also removes.
 
@@ -91,7 +81,7 @@ Loading the extension adds a **second, plain-text copy** of your typed prompts, 
 <agent dir>/prompt-history/history.jsonl
 ```
 
-`<agent dir>` is Pi's `getAgentDir()`: `~/.pi/agent` by default, or `PI_CODING_AGENT_DIR` when set. Anything you type, including secrets pasted into a prompt, is kept there until you remove it. Use [`/history pause`](#pause) before typing something you do not want kept. Remove entries with [Ctrl+D in the picker or `/history clear`](#delete-and-clear), or by deleting that file yourself. None of these touch Pi's sessions or guarantee erasure from backups or disk.
+`<agent dir>` is Pi's `getAgentDir()`: `~/.pi/agent` by default, or `PI_CODING_AGENT_DIR` when set. Anything you type, including secrets pasted into a prompt, is kept there until you remove it. Remove entries with [Ctrl+D in the picker or `/history clear`](#delete-and-clear), or by deleting that file yourself. None of these touch Pi's sessions or guarantee erasure from backups or disk.
 
 - The directory is created with mode `0700` and the file with `0600` where the platform supports it. Existing permissions are not changed.
 - History is not automatically exposed to the model: no tool, no context injection. A recalled prompt is sent only when you submit it.
@@ -99,7 +89,7 @@ Loading the extension adds a **second, plain-text copy** of your typed prompts, 
 
 ## What gets recorded
 
-Unless [paused](#pause), a prompt is recorded when Pi's `input` hook sees it with `source: "interactive"`, in TUI mode (`ctx.mode === "tui"`), in a session that has a session file. That includes prompts typed while the agent is streaming (steering and follow-up).
+A prompt is recorded when Pi's `input` hook sees it with `source: "interactive"`, in TUI mode (`ctx.mode === "tui"`), in a session that has a session file. That includes prompts typed while the agent is streaming (steering and follow-up).
 
 Never recorded:
 
@@ -129,7 +119,7 @@ Pi already keeps your prompts: in its session files, which `/resume` and `/tree`
 - In a new Pi process with a new session, Up recalls nothing. After `/resume`, Up recalls that session's prompts. After `/new`, Up still recalls the prompts typed earlier in the same process.
 - This extension's picker finds a prompt typed in an earlier Pi process straight away, without resuming its session.
 
-What the extension adds is one prompt-only index shared by every Pi process and session, searched by substring, scoped to the current directory or all directories, with per-prompt deletion, clearing, and pause. It does not replace Pi's session storage or search it, and removing a prompt here leaves it in Pi's session files.
+What the extension adds is one prompt-only index shared by every Pi process and session, searched by substring, scoped to the current directory or all directories, with per-prompt deletion and clearing. It does not replace Pi's session storage or search it, and removing a prompt here leaves it in Pi's session files.
 
 ## Record format
 

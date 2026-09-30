@@ -16,7 +16,7 @@ npm test                        # node:test against real temporary files
 npm run check:package           # the packed files and package.json rules below
 npm run smoke:install -- 0.87.1 # install the packed package, load it in real Pi
 npm run acceptance              # real-TUI release checks (spike/acceptance.py)
-npm run spike                   # compatibility spike, shortcut, and pause checks
+npm run spike                   # compatibility spike and shortcut checks
 ```
 
 To check another Pi release, install it over the lockfile, run the checks, then restore the lock:
@@ -36,9 +36,9 @@ Layout:
 - `src/config.ts`: store and config paths from `getAgentDir()`, and the validated shortcut setting.
 - `test/`: behavior tests. `delete.test.ts` and `clear.test.ts` cover deletion through the picker and `/history clear`. `concurrency.test.ts` runs the store in several Node processes at once. `harness.ts` is a minimal host that records registered handlers and fires events at them; it is not a Pi runtime.
 - `scripts/`: packaging checks. `check-package.mjs` asserts the rules below against `npm pack`. `smoke-install.mjs` packs the extension and unpacks it where no `node_modules` can reach it, installs the given Pi release with `--omit=dev --ignore-scripts`, adds the extension with `pi install`, and checks that Pi loads `/history` from it and that print, JSON, and RPC prompts reach the input hook but are never recorded.
-- `spike/`: real-Pi checks and the compatibility spike. `acceptance.py` drives the real extension in the real TUI through `harness.py`, with `scripted.ts` as an in-process model whose replies and compactions wait for the script, so it can type while Pi streams or compacts. `shortcut.py` covers the shortcut, its config, reload, and every reserved-action conflict. `pause.py` covers pause, with `driver.ts` swallowing prompts so no model is called. `sdk.mjs`, `streaming.mjs`, `tui.py`, and `probe.ts` are the original spike; `docs/research/` records its findings.
+- `spike/`: real-Pi checks and the compatibility spike. `acceptance.py` drives the real extension in the real TUI through `harness.py`, with `scripted.ts` as an in-process model whose replies and compactions wait for the script, so it can type while Pi streams or compacts. `shortcut.py` covers the shortcut, its config, reload, and every reserved-action conflict. `driver.ts` swallows prompts for `scripts/smoke-install.mjs` so no model is called. `sdk.mjs`, `streaming.mjs`, `tui.py`, and `probe.ts` are the original spike; `docs/research/` records its findings.
 
-The extension registers handlers and reads `config.json` once to register the shortcut; it opens the history file only at the first eligible prompt or search. Each Pi session runtime (startup, `/reload`, `/new`, `/resume`, `/fork`) gets a fresh extension instance, and `session_shutdown` stops capture, waits for pending writes, and closes the store, so a replaced runtime never records, and a picker still open when its session shuts down restores nothing. The pause flag is the one thing kept across runtimes: it lives on `globalThis` under `Symbol.for("pi-prompt-history/process-state")`, because Pi documents no process-lifetime state. This relies on Pi reusing one Node realm for every runtime in a process, which Pi does not promise, so `spike/pause.py` must pass on every supported Pi release.
+The extension registers handlers and reads `config.json` once to register the shortcut; it opens the history file only at the first eligible prompt or search. Each Pi session runtime (startup, `/reload`, `/new`, `/resume`, `/fork`) gets a fresh extension instance, and `session_shutdown` stops capture, waits for pending writes, and closes the store, so a replaced runtime never records, and a picker still open when its session shuts down restores nothing.
 
 Package rules, checked by `npm run check:package`:
 

@@ -128,8 +128,8 @@ try {
 
 	// Pi loads `-e` extensions before installed packages, and the driver
 	// swallows input, so the frontends use a separate agent directory where
-	// both come from `-e`, in order: the extension's hook runs first, as
-	// spike/pause.py shows by recording before the same driver swallows.
+	// both come from `-e`, in order: the extension's hook runs before the
+	// driver swallows.
 	const bare = join(home, "bare-agent");
 	const frontend = (args, input) =>
 		pi(["-e", installed, "-e", join(repo, "spike/driver.ts"), ...args], {
