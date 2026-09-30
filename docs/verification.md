@@ -62,7 +62,7 @@ CI runs lint, typecheck, `npm test`, `check:package`, and `smoke:install` for ea
 
 Recorded on 2026-09-29 on macOS arm64. Real-TUI checks run the real CLI in a PTY with `TERM=xterm-256color`, in isolated temporary home and agent directories, with no network.
 
-On both Pi releases, with Node 22.22.0:
+On Pi 0.85.1 and 0.87.1, with Node 22.22.0:
 
 - `npm run lint`, `npm run typecheck`, `npm test` (157 tests), `npm run check:package`, and `npm run smoke:install` pass. All of these also pass with Node 24.21.0.
 - `spike/acceptance.py` passes: idle, steering (Enter while streaming), and follow-up (Alt+Enter) prompts are each recorded once, and delivering them records nothing more; prompts queued during `/compact` are recorded as described in [What gets recorded](behavior.md#what-gets-recorded) (only the first on 0.85.1, each once on 0.87.1); the [built-in history comparison](behavior.md#compared-with-pis-built-in-history); capture and the picker after `/reload`, `/new`, `/resume`, and `/fork`, with each prompt recorded once; restore with normalization and without submitting, and Escape keeping the draft; the image warning, declined and accepted; Tab scope and Ctrl+D with its confirmation; `/history clear cwd` and `clear all` through Pi's confirmation dialog, cancelled and accepted; resizing to 24, 10, 200, and 60 columns with the picker open, without Pi exiting and with restore still exact afterwards (not how it renders); Japanese, accented, and emoji text typed and found with case-folded and punctuation queries; the picker opening and restoring under the light theme; Pi's `modal-editor.ts` example loaded alongside; two Ctrl+R presses leaving one picker; and a picker open while the session is replaced restoring nothing into the new one.
@@ -71,7 +71,7 @@ On both Pi releases, with Node 22.22.0:
 
 Pi 0.99.1 was added on 2026-09-30 on macOS arm64 with Node 22.22.0: `npm run lint`, `npm run typecheck`, `npm test` (165 tests), `npm run check:package`, `npm run smoke:install -- 0.99.1`, and `spike/acceptance.py` pass, with prompts queued during `/compact` each recorded once, as on 0.87.1. `spike/shortcut.py`, `spike/pause.py`, and `npm run spike` were not rerun on 0.99.1.
 
-After the MIT license change, `npm run lint`, `npm run typecheck`, `npm test`, `npm run check:package`, and `npm run smoke:install` were rerun and pass on both Pi releases with Node 22.22.0, and CI reran them with Node 24.21.0 (see below). The documented install was also checked from a fresh clone, with isolated home and agent directories: `pi install` on the checkout, with no `node_modules`, records it in `settings.json` and `pi list` shows it. That check does not load the extension; `smoke:install` covers loading, for the packed package.
+After the MIT license change, `npm run lint`, `npm run typecheck`, `npm test`, `npm run check:package`, and `npm run smoke:install` were rerun and pass on Pi 0.85.1 and 0.87.1 with Node 22.22.0, and CI reran them with Node 24.21.0 (see below). The clone install was also checked from a fresh clone, with isolated home and agent directories: `pi install` on the checkout, with no `node_modules`, records it in `settings.json` and `pi list` shows it. That check does not load the extension; `smoke:install` covers loading, for the packed package.
 
 The automated tests cover capture, search, storage, and lifecycle; Unicode and punctuation matching; the 32,768-byte boundary; retention and compaction; rereading a file other processes changed; the newest-100 cap over all retained records; confirmations; config fallback and reload; and the unavailable state without stale results. They use a [minimal host harness](#development), not a Pi runtime.
 
@@ -85,6 +85,7 @@ Not checked, so not claimed:
 - Real model providers. The scripted model drives Pi's real agent loop, queues, and compaction, but not HTTP, retries in the TUI, or automatic (threshold or overflow) compaction in the TUI.
 - Pi delivering `session_shutdown` twice to one runtime; only the host harness tests a repeated shutdown.
 - Several real Pi processes appending at once; `test/concurrency.test.ts` uses several Node processes.
+- Installing from the npm registry; `smoke:install` installs the packed tarball, not the published package.
 - Other editor extensions than `modal-editor.ts`, installing from git, Windows, and any Pi release, Node version, or platform not in the table above.
 
 ## Contributing and support

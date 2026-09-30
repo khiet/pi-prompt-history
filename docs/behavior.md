@@ -6,14 +6,20 @@ Detailed behavior and limitations for pi-prompt-history. [The PRD](https://githu
 
 ## Install
 
-Requires a [tested Pi and Node](verification.md#tested-compatibility). Clone the repository, then add the checkout to Pi:
+Requires a [tested Pi and Node](verification.md#tested-compatibility). Install the published package:
+
+```sh
+pi install npm:pi-prompt-history
+```
+
+To work on the extension, add a clone instead:
 
 ```sh
 git clone https://github.com/khiet/pi-prompt-history.git
 pi install /absolute/path/to/pi-prompt-history
 ```
 
-`pi install` records the path in `<agent dir>/settings.json`, and Pi loads the extension from the checkout on its next start, or after `/reload`. No `npm install` is needed to run it: the extension uses only Node built-ins and Pi's own packages, has no runtime dependencies, and runs no install scripts. To try it for one run instead, use `pi -e /absolute/path/to/pi-prompt-history`. To remove it, run `pi remove /absolute/path/to/pi-prompt-history`; your recorded history stays in place until you delete it (see [Privacy](#privacy-what-loading-this-extension-changes)).
+`pi install` records the source in `<agent dir>/settings.json`, and Pi loads the extension on its next start, or after `/reload`. A checkout needs no `npm install`: the extension uses only Node built-ins and Pi's own packages, has no runtime dependencies, and runs no install scripts. To try it for one run instead, use `pi -e` with the same source. To remove it, run `pi remove` with the source you installed; your recorded history stays in place until you delete it (see [Privacy](#privacy-what-loading-this-extension-changes)).
 
 `pi install git:github.com/khiet/pi-prompt-history` should also work, since Pi clones the repository and runs `npm install --omit=dev`, but that route has not been tested.
 

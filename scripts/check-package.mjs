@@ -45,8 +45,12 @@ execFileSync("git", ["ls-files", "--error-unmatch", "package-lock.json"], {
 
 // Published to npm; the gallery and `npm view` link back to the source.
 assert.equal(manifest.private, undefined, "package must be publishable");
-assert.match(manifest.version, /^\d+\.\d+\.\d+$/, "release version");
-assert.notEqual(manifest.version, "0.0.0", "release version");
+assert.match(
+	manifest.version,
+	/^\d+\.\d+\.\d+$/,
+	"version is not plain semver",
+);
+assert.notEqual(manifest.version, "0.0.0", "version is the unreleased 0.0.0");
 assert.ok(manifest.keywords?.includes("pi-package"), "pi-package keyword");
 for (const field of ["repository", "homepage", "bugs", "author"])
 	assert.ok(manifest[field], `${field} must be set`);
