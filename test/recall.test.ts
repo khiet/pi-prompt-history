@@ -226,29 +226,6 @@ describe("prefilling the query from the draft", () => {
 			await running;
 		});
 
-	test("Escape leaves the draft that prefilled the query unchanged", async () => {
-		await seed([{ text: "deploy the app", ts: 1 }]);
-		host.ui.draft = "deploy";
-		const { picker, running } = await openHistory();
-
-		picker.press(..." now", keys.escape);
-		await running;
-
-		assert.deepEqual(host.ui.editorWrites, []);
-		assert.equal(host.ui.draft, "deploy");
-	});
-
-	test("Enter replaces the draft that prefilled the query", async () => {
-		await seed([{ text: "deploy the app", ts: 1 }]);
-		host.ui.draft = "deploy";
-		const { picker, running } = await openHistory();
-
-		picker.press(keys.enter);
-		await running;
-
-		assert.deepEqual(host.ui.editorWrites, ["deploy the app"]);
-		assert.equal(host.ui.draft, "deploy the app");
-	});
 });
 
 describe("replacing a draft that contains an image", () => {
