@@ -79,7 +79,8 @@ describe("picker deletion", () => {
 		const { picker, running } = await openHistory();
 
 		picker.press(keys.ctrlD);
-		assert.match(picker.render().join("\n"), /Delete this prompt\?/);
+		// One copy needs no count.
+		assert.match(picker.render().join("\n"), /Delete this prompt\? y/);
 		picker.press("n");
 		assert.doesNotMatch(picker.render().join("\n"), /Delete this prompt\?/);
 		picker.press(keys.ctrlD, keys.escape);
@@ -104,20 +105,63 @@ describe("picker deletion", () => {
 		assert.deepEqual(await storedIds(), ["a", "b", "c"]);
 	});
 
-	test("deletes only the selected submission, keeping identical ones", async () => {
+	test("deletes every copy in this directory, keeping other directories' copies", async () => {
 		await seed([
 			{ id: "old", text: "same", ts: 1 },
-			{ id: "mid", text: "same", ts: 2 },
-			{ id: "new", text: "same", ts: 3 },
+			{ id: "there", text: "same", ts: 2, cwd: "/work/other" },
+			{ id: "near", text: "same ", ts: 3 },
+			{ id: "new", text: "same", ts: 4 },
 		]);
 		const { picker, running } = await openHistory();
 
-		picker.press(keys.down, keys.ctrlD, "y");
+		picker.press(keys.ctrlD);
+		assert.match(
+			picker.render().join("\n"),
+			/Delete this prompt \(2 copies\)\?/,
+		);
+		picker.press("y");
 		await picker.until((screen) => !screen.includes("Deleting"));
 		picker.press(keys.escape);
 		await running;
 
-		assert.deepEqual(await storedIds(), ["old", "new"]);
+		assert.deepEqual(await storedIds(), ["there", "near"]);
+	});
+
+	test("in all directories, deletes every copy anywhere", async () => {
+		await seed([
+			{ id: "old", text: "same", ts: 1 },
+			{ id: "there", text: "same", ts: 2, cwd: "/work/other" },
+			{ id: "kept", text: "kept", ts: 3 },
+		]);
+		const { picker, running } = await openHistory();
+
+		picker.press(keys.tab);
+		// The newest copy's directory shows once the scope's results arrive.
+		await picker.until((screen) => screen.includes("/work/other"));
+		picker.press(keys.down, keys.ctrlD);
+		assert.match(
+			picker.render().join("\n"),
+			/Delete this prompt \(2 copies\)\?/,
+		);
+		picker.press("y");
+		await picker.until((screen) => !screen.includes("Deleting"));
+		picker.press(keys.escape);
+		await running;
+
+		assert.deepEqual(await storedIds(), ["kept"]);
+	});
+
+	test("shows a repeated prompt once", async () => {
+		await seed([
+			{ id: "a", text: "repeated", ts: 1 },
+			{ id: "b", text: "repeated", ts: 2 },
+		]);
+		const { picker, running } = await openHistory();
+
+		const screen = picker.render().join("\n");
+		assert.equal(screen.match(/repeated +1970/g)?.length, 1);
+		picker.press(keys.escape);
+		await running;
 	});
 
 	test("selects the next remaining result after deleting", async () => {

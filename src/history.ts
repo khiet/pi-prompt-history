@@ -36,12 +36,20 @@ export type SearchRequest = {
 	cwd?: string | undefined;
 };
 
+/** The newest record of one distinct text in scope. */
+export type SearchEntry = HistoryRecord & {
+	/** Records in scope with byte-identical text, this one included. */
+	copies: number;
+};
+
 export type SearchResult = {
-	/** At most MAX_RESULTS matches, newest first with `id` breaking ties. */
-	records: HistoryRecord[];
-	/** More records matched than were returned. */
+	/**
+	 * At most MAX_RESULTS distinct texts, newest first with `id` breaking ties.
+	 */
+	records: SearchEntry[];
+	/** More distinct texts matched than were returned. */
 	capped: boolean;
-	/** Every record that matched, returned or not. */
+	/** Every distinct text that matched, returned or not. */
 	total: number;
 	/** Lines in the file that were skipped because they are not records. */
 	malformed: number;
@@ -69,10 +77,11 @@ export type History = {
 	 */
 	search(request: SearchRequest): Promise<SearchResult>;
 	/**
-	 * Removes the one record with this id, leaving other submissions of the
-	 * same text. Resolves false, without rewriting, when no record has it.
+	 * Removes every record in scope (every directory when `cwd` is omitted)
+	 * whose text is byte-identical to `text`, and resolves with how many.
+	 * Resolves 0, without rewriting, when none match.
 	 */
-	delete(id: string): Promise<boolean>;
+	delete(target: { text: string; cwd?: string | undefined }): Promise<number>;
 	/**
 	 * Removes every record in scope (every directory when `cwd` is omitted)
 	 * and resolves with how many. Scope and count are decided when the rewrite
@@ -251,13 +260,17 @@ export function openHistory(paths: StorePaths): History {
 			pending = read.catch(() => {});
 			const { records, malformed } = await read;
 			const needle = query.toLowerCase();
-			const matches = records
-				.filter(
-					(record) =>
-						(cwd === undefined || record.cwd === cwd) &&
-						record.text.toLowerCase().includes(needle),
-				)
-				.sort(newestFirst);
+			const byText = new Map<string, SearchEntry>();
+			for (const record of records) {
+				if (cwd !== undefined && record.cwd !== cwd) continue;
+				if (!record.text.toLowerCase().includes(needle)) continue;
+				const seen = byText.get(record.text);
+				if (!seen) byText.set(record.text, { ...record, copies: 1 });
+				else if (newestFirst(record, seen) < 0)
+					byText.set(record.text, { ...record, copies: seen.copies + 1 });
+				else seen.copies++;
+			}
+			const matches = [...byText.values()].sort(newestFirst);
 			return {
 				records: matches.slice(0, MAX_RESULTS),
 				capped: matches.length > MAX_RESULTS,
@@ -266,8 +279,11 @@ export function openHistory(paths: StorePaths): History {
 			};
 		},
 
-		async delete(id) {
-			return (await queueRewrite((record) => record.id !== id)) > 0;
+		delete({ text, cwd }) {
+			return queueRewrite(
+				(record) =>
+					record.text !== text || (cwd !== undefined && record.cwd !== cwd),
+			);
 		},
 
 		clear({ cwd }) {

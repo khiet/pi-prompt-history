@@ -18,14 +18,14 @@ Loads on next start or `/reload`. No runtime dependencies, no install scripts. T
 | Key | Action |
 | --- | --- |
 | `ctrl+r` or `/history` | Open. Lists this directory's prompts, newest first |
-| _type_ | Case-insensitive literal substring match, newest 100 shown |
+| _type_ | Case-insensitive literal substring match, newest 100 distinct prompts shown |
 | `tab` | Toggle this directory / all directories |
 | `up` / `down` | Select and preview a prompt |
 | `enter` | Replace the whole draft with the prompt (not sent) |
-| `ctrl+d` | Delete the selected record (`y` to confirm) |
+| `ctrl+d` | Delete every copy of the selected prompt in the current scope (`y` to confirm) |
 | `esc` | Close, draft unchanged |
 
-Directory scope uses the exact cwd, not the Git root. Attachments from recalled prompts are not restored.
+A prompt typed more than once is listed once, at its newest use; each submission is still stored. Directory scope uses the exact cwd, not the Git root. Attachments from recalled prompts are not restored.
 
 ## Commands
 

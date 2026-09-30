@@ -180,7 +180,7 @@ export default function promptHistory(pi: ExtensionAPI): void {
 			}
 		};
 
-	const deleteRecord: PickerDelete = async (record) => {
+	const deletePrompt: PickerDelete = async (target) => {
 		if (!live)
 			return {
 				kind: "failed",
@@ -190,8 +190,8 @@ export default function promptHistory(pi: ExtensionAPI): void {
 		try {
 			const opened = openStore();
 			historyFile = opened.historyFile;
-			// A record another process already removed counts as deleted.
-			await opened.history.delete(record.id);
+			// Copies another process already removed count as deleted.
+			await opened.history.delete(target);
 			return { kind: "deleted" };
 		} catch (error) {
 			return {
@@ -211,7 +211,7 @@ export default function promptHistory(pi: ExtensionAPI): void {
 					cwd: ctx.cwd,
 					initial,
 					search,
-					delete: deleteRecord,
+					delete: deletePrompt,
 					theme,
 					keybindings,
 					requestRender: () => tui.requestRender(),
