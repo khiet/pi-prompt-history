@@ -44,7 +44,7 @@ Package rules, checked by `npm run check:package`:
 
 - One extension entry point, `./src/index.ts`, declared under `pi.extensions`.
 - An explicit `files` allowlist of the four modules; npm adds `package.json`, `README.md`, and `LICENSE`, and nothing else is packed, so no local history, tests, or spike files ship.
-- The package stays `private`, and `package.json`, the lockfile, and `LICENSE` all say MIT.
+- The package is publishable: not `private`, a release version, the `pi-package` keyword, and `repository`, `homepage`, `bugs`, and `author` set. `package.json`, the lockfile, and `LICENSE` all say MIT.
 - `@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui` are `*` peer dependencies, as Pi's package docs require, and are never bundled. Runtime imports are limited to them and Node built-ins. There are no `dependencies` and no install or `prepare` scripts.
 - `package-lock.json` is committed; CI installs with `npm ci --ignore-scripts`.
 
