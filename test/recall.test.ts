@@ -272,6 +272,22 @@ describe("picker states and display", () => {
 	});
 });
 
+describe("/history arguments", () => {
+	for (const args of ["stop", "pause", "resume"])
+		test(`"/history ${args}" shows usage and opens nothing`, async () => {
+			await host.command("history", args);
+
+			assert.equal(host.ui.pickers.length, 0);
+			assert.deepEqual(host.notices, [
+				{
+					message:
+						"Usage: /history, /history clear cwd, or /history clear all.",
+					type: "warning",
+				},
+			]);
+		});
+});
+
 describe("/history lifecycle guards", () => {
 	test("does nothing outside the TUI", async () => {
 		await seed([{ text: "old prompt", ts: 1 }]);

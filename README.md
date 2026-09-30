@@ -31,11 +31,8 @@ A prompt typed more than once is listed once, at its newest use; each submission
 
 | Command | Effect |
 | --- | --- |
-| `/history pause` / `/history resume` | Stop / start recording for this Pi process |
 | `/history clear cwd` | Delete this directory's prompts (exact cwd), after confirmation |
 | `/history clear all` | Delete every recorded prompt, after confirmation |
-
-Pause survives `/reload` and session changes. Recording resumes on process restart.
 
 ## Config
 
@@ -69,7 +66,7 @@ History is not automatically exposed to the model. Recalled prompts can still be
 
 ## Caveats
 
-- A second, plain-text copy of recorded prompts, secrets included. Use `/history pause` first; it does **not** pause Pi's own session storage.
+- A second, plain-text copy of recorded prompts, secrets included.
 - Delete and clear do not touch Pi's session files or guarantee erasure from disk or backups.
 - No locking: a rewrite can drop another process's concurrent append. Local filesystems only.
 
