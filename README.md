@@ -4,6 +4,8 @@ Ctrl+R prompt search for [Pi](https://pi.dev). Records the prompts you type to a
 
 > **Stores prompts in plain text, secrets included.** Read [Caveats](#caveats) before installing.
 
+![Pi prompt history demo: Ctrl+R opens fictional history, typing webhook retry filters results, Down previews a multiline prompt, and Enter restores it without sending.](docs/assets/prompt-history.gif)
+
 ## Install
 
 ```sh
