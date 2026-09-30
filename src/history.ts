@@ -263,7 +263,6 @@ export function openHistory(paths: StorePaths): History {
 			pending = read.catch(() => {});
 			const { records, malformed } = await read;
 			const needle = query.toLowerCase();
-			// Each text keeps its newest record and counts every copy in scope.
 			const byText = new Map<string, SearchEntry>();
 			for (const record of records) {
 				if (cwd !== undefined && record.cwd !== cwd) continue;

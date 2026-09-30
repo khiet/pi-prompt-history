@@ -32,10 +32,7 @@ export type DeleteOutcome =
 	| { kind: "deleted" }
 	| { kind: "failed"; guidance: string };
 
-/**
- * Deletes every record of `text` in scope (every directory when `cwd` is
- * omitted); must resolve, reporting failures.
- */
+/** Deletes the target's records; must resolve, reporting failures. */
 export type PickerDelete = (target: DeleteTarget) => Promise<DeleteOutcome>;
 
 export type PickerOptions = {
