@@ -18,7 +18,7 @@ Loads on next start or `/reload`. No runtime dependencies, no install scripts. T
 | Key | Action |
 | --- | --- |
 | `ctrl+r` or `/history` | Open. Lists this directory's prompts, newest first |
-| _type_ | Case-insensitive literal substring match, newest 100 distinct prompts shown |
+| _type_ | Show prompts containing every typed word, in any order (case-insensitive, literal); newest 100 distinct prompts shown |
 | `tab` | Toggle this directory / all directories |
 | `up` / `down` | Select and preview a prompt |
 | `enter` | Replace the whole draft with the prompt (not sent) |
