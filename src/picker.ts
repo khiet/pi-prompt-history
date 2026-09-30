@@ -38,7 +38,9 @@ export type PickerDelete = (target: DeleteTarget) => Promise<DeleteOutcome>;
 export type PickerOptions = {
 	/** The directory the picker opens scoped to. */
 	cwd: string;
-	/** Results for an empty query in `cwd`, loaded before the picker opens. */
+	/** The query the picker opens with; editable like typed text. */
+	query: string;
+	/** Results for `query` in `cwd`, loaded before the picker opens. */
 	initial: PickerContent;
 	/** Must resolve, reporting failures as unavailable content. */
 	search: PickerSearch;
@@ -62,6 +64,9 @@ export type PickerOptions = {
 export function createPicker(options: PickerOptions): Component & Focusable {
 	const { theme, keybindings, done } = options;
 	const input = new Input();
+	// Pasted rather than set, so the cursor lands after the text and editing
+	// continues from there as if it had been typed.
+	input.handleInput(`\x1b[200~${options.query}\x1b[201~`);
 	let allDirectories = false;
 	let content = options.initial;
 	let list: SelectList | undefined;

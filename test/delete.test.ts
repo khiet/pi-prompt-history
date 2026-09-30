@@ -249,7 +249,7 @@ describe("picker deletion", () => {
 		skip: skipPermissionTests,
 	}, async () => {
 		await threeHere();
-		host.ui.draft = "my draft";
+		host.ui.draft = "my draft\nsecond line";
 		const { picker, running } = await openHistory();
 		await chmod(dirname(store.historyFile), 0o500);
 
@@ -258,7 +258,7 @@ describe("picker deletion", () => {
 
 		assert.ok(screen.includes(store.historyFile));
 		assert.match(screen, /charlie/);
-		assert.equal(host.ui.draft, "my draft");
+		assert.equal(host.ui.draft, "my draft\nsecond line");
 		await chmod(dirname(store.historyFile), 0o700);
 		picker.press(keys.escape);
 		await running;
