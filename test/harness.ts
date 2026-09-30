@@ -39,8 +39,8 @@ export const keys = {
 	escape: "\x1b",
 	tab: "\t",
 	ctrlD: "\x04",
-	/** Deletes the query back to the start of the line. */
-	clearQuery: "\x15",
+	/** Clears the query field. */
+	ctrlU: "\x15",
 };
 
 export type ContextOptions = {

@@ -105,7 +105,7 @@ describe("/history picker", () => {
 		host.ui.draft = "work in progress";
 		const { picker, running } = await openHistory();
 
-		picker.press(keys.clearQuery);
+		picker.press(keys.ctrlU);
 		await picker.until((shown) => shown.includes("newer"));
 		picker.press(keys.down, keys.enter);
 		await running;
@@ -209,7 +209,7 @@ describe("prefilling the query from the draft", () => {
 		assert.deepEqual(host.ui.editorWrites, ["deploy staging"]);
 	});
 
-	for (const draft of ["", "   ", "deploy\nstaging"])
+	for (const draft of ["", "   ", "deploy\nstaging", "deploy\x1b[201~"])
 		test(`${JSON.stringify(draft)} opens with an empty query on recent prompts`, async () => {
 			await seed([
 				{ text: "deploy the app", ts: 1 },
@@ -225,7 +225,6 @@ describe("prefilling the query from the draft", () => {
 			picker.press(keys.escape);
 			await running;
 		});
-
 });
 
 describe("replacing a draft that contains an image", () => {
@@ -240,7 +239,7 @@ describe("replacing a draft that contains an image", () => {
 			host.ui.confirmAnswer = false;
 			const { picker, running } = await openHistory();
 
-			picker.press(keys.clearQuery, keys.enter);
+			picker.press(keys.ctrlU, keys.enter);
 			await running;
 
 			assert.equal(host.ui.confirms.length, 1);
@@ -254,7 +253,7 @@ describe("replacing a draft that contains an image", () => {
 		host.ui.draft = "see /tmp/pi-clipboard-1.png";
 		const { picker, running } = await openHistory();
 
-		picker.press(keys.clearQuery, keys.enter);
+		picker.press(keys.ctrlU, keys.enter);
 		await running;
 
 		assert.equal(host.ui.confirms.length, 1);
@@ -266,7 +265,7 @@ describe("replacing a draft that contains an image", () => {
 		host.ui.draft = "mention image.png.bak and pngs";
 		const { picker, running } = await openHistory();
 
-		picker.press(keys.clearQuery, keys.enter);
+		picker.press(keys.ctrlU, keys.enter);
 		await running;
 
 		assert.deepEqual(host.ui.confirms, []);
