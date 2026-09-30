@@ -128,7 +128,7 @@ try {
 
 	// Pi loads `-e` extensions before installed packages, and the driver
 	// swallows input, so the frontends use a separate agent directory where
-	// both come from `-e`, in order, so the extension's hook runs before the
+	// both come from `-e`, in order: the extension's hook runs before the
 	// driver swallows.
 	const bare = join(home, "bare-agent");
 	const frontend = (args, input) =>
