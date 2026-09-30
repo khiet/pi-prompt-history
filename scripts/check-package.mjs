@@ -43,7 +43,8 @@ execFileSync("git", ["ls-files", "--error-unmatch", "package-lock.json"], {
 	stdio: "ignore",
 });
 
-// Published to npm; the gallery and `npm view` link back to the source.
+// Published to npm. Pi's package gallery lists only packages with the
+// `pi-package` keyword.
 assert.equal(manifest.private, undefined, "package must be publishable");
 assert.match(
 	manifest.version,
