@@ -71,6 +71,8 @@ On Pi 0.85.1 and 0.87.1, with Node 22.22.0:
 
 Pi 0.99.1 was added on 2026-09-30 on macOS arm64 with Node 22.22.0: `npm run lint`, `npm run typecheck`, `npm test` (165 tests), `npm run check:package`, `npm run smoke:install -- 0.99.1`, and `spike/acceptance.py` pass, with prompts queued during `/compact` each recorded once, as on 0.87.1. `spike/shortcut.py`, `spike/pause.py`, and `npm run spike` were not rerun on 0.99.1.
 
+After 0.1.0 was published on 2026-09-30, `pi install npm:pi-prompt-history` from the registry was checked on Pi 0.85.1 and 0.99.1 with Node 22.22.0, in isolated home and agent directories: the registry tarball's shasum matches the published one, and Pi's RPC `get_commands` reports `/history` loaded from the installed package (`origin: package`, `source: npm:pi-prompt-history`).
+
 After the MIT license change, `npm run lint`, `npm run typecheck`, `npm test`, `npm run check:package`, and `npm run smoke:install` were rerun and pass on Pi 0.85.1 and 0.87.1 with Node 22.22.0, and CI reran them with Node 24.21.0 (see below). The clone install was also checked from a fresh clone, with isolated home and agent directories: `pi install` on the checkout, with no `node_modules`, records it in `settings.json` and `pi list` shows it. That check does not load the extension; `smoke:install` covers loading, for the packed package.
 
 The automated tests cover capture, search, storage, and lifecycle; Unicode and punctuation matching; the 32,768-byte boundary; retention and compaction; rereading a file other processes changed; the newest-100 cap over all retained records; confirmations; config fallback and reload; and the unavailable state without stale results. They use a [minimal host harness](#development), not a Pi runtime.
@@ -85,7 +87,6 @@ Not checked, so not claimed:
 - Real model providers. The scripted model drives Pi's real agent loop, queues, and compaction, but not HTTP, retries in the TUI, or automatic (threshold or overflow) compaction in the TUI.
 - Pi delivering `session_shutdown` twice to one runtime; only the host harness tests a repeated shutdown.
 - Several real Pi processes appending at once; `test/concurrency.test.ts` uses several Node processes.
-- Installing from the npm registry; `smoke:install` installs the packed tarball, not the published package.
 - Other editor extensions than `modal-editor.ts`, installing from git, Windows, and any Pi release, Node version, or platform not in the table above.
 
 ## Contributing and support

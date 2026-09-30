@@ -30,6 +30,8 @@ The structures above are direct observations; recommendations are editorial inte
 
 For this private, unpublished project, retain the README's tested clone-and-local-install procedure. Do not copy npm commands from published extensions or promote the unverified git-install route.
 
+_Superseded on 2026-09-30: the package is published to npm as of 0.1.0, and the README now leads with `pi install npm:pi-prompt-history`._
+
 ## Application to the proposals
 
 1. Start with purpose and a working installation, not lifecycle internals.
