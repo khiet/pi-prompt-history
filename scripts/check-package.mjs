@@ -1,7 +1,8 @@
 // Checks the package shape Pi installs: one extension entry point, an explicit
 // file allowlist that is exactly what npm packs, `*` Pi peers that are never
 // bundled, no runtime dependencies or install scripts, a committed lockfile,
-// a private manifest, and MIT in the manifest, lockfile, and LICENSE file.
+// a publishable manifest that links back to the repository, and MIT in the
+// manifest, lockfile, and LICENSE file.
 // Run from the repository root; exits non-zero on any violation.
 
 import assert from "node:assert/strict";
@@ -42,8 +43,18 @@ execFileSync("git", ["ls-files", "--error-unmatch", "package-lock.json"], {
 	stdio: "ignore",
 });
 
-// Publication stays a separate decision from open-sourcing.
-assert.equal(manifest.private, true, "package must stay private");
+// Published to npm. Pi's package gallery lists only packages with the
+// `pi-package` keyword.
+assert.equal(manifest.private, undefined, "package must be publishable");
+assert.match(
+	manifest.version,
+	/^\d+\.\d+\.\d+$/,
+	"version is not plain semver",
+);
+assert.notEqual(manifest.version, "0.0.0", "version is the unreleased 0.0.0");
+assert.ok(manifest.keywords?.includes("pi-package"), "pi-package keyword");
+for (const field of ["repository", "homepage", "bugs", "author"])
+	assert.ok(manifest[field], `${field} must be set`);
 assert.equal(manifest.license, "MIT", "manifest license");
 const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
 assert.equal(lock.packages[""].license, manifest.license, "lockfile license");

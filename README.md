@@ -2,16 +2,22 @@
 
 Ctrl+R prompt search for [Pi](https://pi.dev). Records the prompts you type to a local JSONL file, then searches, restores, and deletes them across sessions and processes.
 
-> **MVP, not production-ready or on npm.** Stores prompts in plain text. Read [Caveats](#caveats) before installing.
+> **Stores prompts in plain text, secrets included.** Read [Caveats](#caveats) before installing.
 
 ## Install
+
+```sh
+pi install npm:pi-prompt-history
+```
+
+Loads on next start or `/reload`. No runtime dependencies, no install scripts. Try once with `pi -e npm:pi-prompt-history`; remove with `pi remove npm:pi-prompt-history` (history is kept).
+
+To work on the extension, install a local clone instead:
 
 ```sh
 git clone https://github.com/khiet/pi-prompt-history.git
 pi install "$PWD/pi-prompt-history"
 ```
-
-Loads on next start or `/reload`. No runtime dependencies, no install scripts. Try once with `pi -e <path>`; remove with `pi remove <path>` (history is kept).
 
 ## Picker
 
@@ -74,7 +80,7 @@ Full behavior and record format: [docs/behavior.md](docs/behavior.md).
 
 ## Compatibility
 
-Tested: Pi 0.85.1, 0.87.1; Node 22.22.0, 24.21.0; macOS arm64 locally, Ubuntu CI. Untested: Windows, git install, real IME. See [docs/verification.md](docs/verification.md).
+Tested: Pi 0.85.1, 0.87.1, 0.99.1; Node 22.22.0, 24.21.0; macOS arm64 locally, Ubuntu CI. Untested: Windows, git install, real IME. See [docs/verification.md](docs/verification.md).
 
 ## Development
 

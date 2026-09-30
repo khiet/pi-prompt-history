@@ -1,12 +1,20 @@
 {
 	"name": "pi-prompt-history",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"description": "Pi extension that records the prompts you type to a local JSONL history and searches them with Ctrl+R or /history.",
 	"keywords": [
 		"pi-package"
 	],
+	"homepage": "https://github.com/khiet/pi-prompt-history#readme",
+	"bugs": {
+		"url": "https://github.com/khiet/pi-prompt-history/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/khiet/pi-prompt-history.git"
+	},
 	"license": "MIT",
+	"author": "Khiet Le",
 	"type": "module",
 	"files": [
 		"src/index.ts",
