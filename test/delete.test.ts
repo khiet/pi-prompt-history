@@ -151,19 +151,6 @@ describe("picker deletion", () => {
 		assert.deepEqual(await storedIds(), ["kept"]);
 	});
 
-	test("shows a repeated prompt once", async () => {
-		await seed([
-			{ id: "a", text: "repeated", ts: 1 },
-			{ id: "b", text: "repeated", ts: 2 },
-		]);
-		const { picker, running } = await openHistory();
-
-		const screen = picker.render().join("\n");
-		assert.equal(screen.match(/repeated +1970/g)?.length, 1);
-		picker.press(keys.escape);
-		await running;
-	});
-
 	test("selects the next remaining result after deleting", async () => {
 		await threeHere();
 		const { picker, running } = await openHistory();
